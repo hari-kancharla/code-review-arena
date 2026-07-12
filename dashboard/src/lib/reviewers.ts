@@ -16,6 +16,7 @@ const CONTROL_DISPLAY_NAMES: Record<string, string> = {
 const DISPLAY_NAMES: Record<string, string> = {
   "reference-patch": "Reference Patch",
   "custom-command": "Custom Command",
+  "shallow-patch": "Shallow Patch",
 };
 
 export const CONTROL_BASELINE_NOTE =
