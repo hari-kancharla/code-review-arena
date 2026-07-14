@@ -16,9 +16,11 @@ python -m pip install -e ".[dev]"
 ```bash
 arena validate benchmark_sets/v1
 arena validate benchmark_sets/audit_v1
+arena validate benchmark_sets/audit_v2
+arena validate benchmark_sets/realfix_seed_v0
 ```
 
-Both print `Valid benchmark set` and exit 0.
+Each prints `Valid benchmark set` and exits 0.
 
 ## 3. Generate run evidence
 
@@ -76,7 +78,7 @@ npm run dev
 ```
 
 Open <http://localhost:3000/leaderboard>. The leaderboard ranks the runs you just
-generated; `/cases` browses both packs, `/runs/<id>` shows a full trace, and
+generated; `/cases` browses every shipped pack, `/runs/<id>` shows a full trace, and
 `/reports/audit-v1` renders the report snapshot. If the API is not running, the home
 and leaderboard pages fall back to the committed report snapshot, while `/cases` and
 `/runs` explain that they need `arena serve`.

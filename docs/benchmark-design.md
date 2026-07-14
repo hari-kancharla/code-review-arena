@@ -23,3 +23,11 @@ key or a dedup set). `certify-pack` reports coverage (`Mutation evidence: N/M ex
 cases`) so this is explicit; a `certified` rating on a case without mutation evidence is a
 claim about the baseline and reference gates, not about lookalike-fix resistance.
 
+Mutation evidence is case-level test-oracle strength, measured once at certification
+time: it grades the case's tests, not any reviewer. Reviewer-generated patches are
+never mutation-tested; a submitted repair is judged by patch application, the case's
+required tests, and its validators. Where mutants do exist, a low mutant count is thin
+evidence (the per-case report prints the count next to the kill rate), and the
+`verified` rung only adds determinism re-runs on top of `certified`; neither rung by
+itself implies strong mutation evidence.
+

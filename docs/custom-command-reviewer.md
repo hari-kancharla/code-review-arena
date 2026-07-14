@@ -16,14 +16,19 @@ arena run benchmark_sets/audit_v1 \
 
 ## Reviewer-visible JSON
 
-Arena writes a temporary `case.json` containing only:
+Arena writes a temporary `case.json`. The default payload is blind and contains only:
 
-- case metadata (`case_id`, `title`, `category`, `severity`, `stack`, `description`)
+- `case_id` and `stack`
 - `pr_diff`
-- `relevant_files`
-- optional `test_output` / `static_analysis_output`
+- `relevant_files` (a bounded set; `context_truncated: true` is added when the
+  limits trimmed or omitted files)
 
-Ground truth, scoring weights, validator names, and expected line ranges are never included.
+Ground truth, scoring weights, validator names, and expected line ranges are never
+included. Case `title`, `description`, `category`, and `severity` paraphrase the
+seeded bug, so they are also omitted by default; `--reveal-metadata` restores them
+for debugging only. Pre-patch `test_output` / `static_analysis_output` would
+disclose the failing assertions' expected values, so they appear only with
+`--reveal-test-output`, which records the run as openly test-assisted.
 
 ## Placeholders
 
