@@ -20,11 +20,13 @@ validate:
 	arena validate benchmark_sets/v1
 	arena validate benchmark_sets/audit_v1
 	arena validate benchmark_sets/audit_v2
+	arena validate benchmark_sets/realfix_seed_v0
 
 lint-cases:
 	arena lint-cases benchmark_sets/v1 --strict
 	arena lint-cases benchmark_sets/audit_v1 --strict
 	arena lint-cases benchmark_sets/audit_v2 --strict
+	arena lint-cases benchmark_sets/realfix_seed_v0 --strict
 
 certify:
 	arena certify-pack benchmark_sets/audit_v2 --allow-local-execution --strict certified

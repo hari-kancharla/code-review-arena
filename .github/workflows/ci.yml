@@ -36,17 +36,20 @@ jobs:
           arena validate benchmark_sets/v1
           arena validate benchmark_sets/audit_v1
           arena validate benchmark_sets/audit_v2
+          arena validate benchmark_sets/realfix_seed_v0
       - name: Pack checksums
         run: |
           arena pack-hash benchmark_sets/v1
           arena pack-hash benchmark_sets/audit_v1
           arena pack-hash benchmark_sets/audit_v2
+          arena pack-hash benchmark_sets/realfix_seed_v0
       - name: Contamination scan
         run: |
           # All shipped packs are authored leak-free; fail the build on any regression.
           arena lint-cases benchmark_sets/v1 --strict
           arena lint-cases benchmark_sets/audit_v1 --strict
           arena lint-cases benchmark_sets/audit_v2 --strict
+          arena lint-cases benchmark_sets/realfix_seed_v0 --strict
       - name: Reviewer contract smoke test
         run: |
           arena schema > /tmp/review-schema.json
@@ -56,8 +59,9 @@ jobs:
         run: arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow-local-execution
       - name: Reference-patch full run (audit_v2)
         run: arena run benchmark_sets/audit_v2 --reviewer reference-patch --mode full --allow-local-execution
-      # Every shipped pack must stay fully certified (baseline fails, reference
-      # passes, mutants killed); fail the build if any case regresses.
+      # The locally executable packs must stay fully certified (baseline fails,
+      # reference passes, mutants killed); fail the build if any case regresses.
+      # The Docker-only RealFix seed pack is certified in the docker job.
       - name: Certify shipped packs
         run: |
           arena certify-pack benchmark_sets/v1 --allow-local-execution --strict certified
@@ -104,6 +108,7 @@ jobs:
           arena validate benchmark_sets/v1
           arena validate benchmark_sets/audit_v1
           arena validate benchmark_sets/audit_v2
+          arena validate benchmark_sets/realfix_seed_v0
       - name: Full test suite
         run: pytest -q
 
@@ -132,6 +137,39 @@ jobs:
         env:
           ARENA_DOCKER_TESTS: "1"
         run: pytest tests/test_docker_execution.py -q
+      # RealFix Seed v0 executes only in its pinned image (the pack sets
+      # default_docker_image: arena-realfix-seed:0), so the seed pack is
+      # certified and control-checked here, where Docker is available.
+      - name: Build RealFix seed image
+        run: bash docker/realfix_seed/build.sh
+      - name: Certify RealFix seed pack (verified)
+        run: |
+          arena certify-pack benchmark_sets/realfix_seed_v0 \
+            --limit 20 --determinism-runs 3 --strict verified
+      - name: Reference-patch run validates every seed case
+        run: |
+          arena run benchmark_sets/realfix_seed_v0 --reviewer reference-patch --mode full --json > /tmp/realfix-reference.json
+          python - <<'PY'
+          import json
+          result = json.load(open("/tmp/realfix-reference.json"))
+          cases = result["case_results"]
+          validated = sum(case["deterministic_pass"] is True for case in cases)
+          if len(cases) != 3 or validated != 3:
+              raise SystemExit(f"expected 3/3 validated seed cases, got {validated}/{len(cases)}")
+          print(f"reference-patch validated {validated}/{len(cases)} seed cases")
+          PY
+      - name: Shallow-patch control validates no seed case
+        run: |
+          arena run benchmark_sets/realfix_seed_v0 --reviewer shallow-patch --mode full --json > /tmp/realfix-shallow.json
+          python - <<'PY'
+          import json
+          result = json.load(open("/tmp/realfix-shallow.json"))
+          cases = result["case_results"]
+          validated = sum(case["deterministic_pass"] is True for case in cases)
+          if len(cases) != 3 or validated != 0:
+              raise SystemExit(f"expected 0/3 validated control cases, got {validated}/{len(cases)}")
+          print(f"shallow-patch validated {validated}/{len(cases)} seed cases")
+          PY
 
   package:
     name: Packaging smoke test
