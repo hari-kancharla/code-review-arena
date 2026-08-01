@@ -6,10 +6,10 @@
 # This is a CI/test pin, not a change to the project's declared floors. It exists
 # so the minimum-supported runtime is exercised on Python 3.11; the normal jobs
 # continue to test the latest resolved dependencies.
-fastapi==0.110.0
-starlette==0.36.3
-pydantic==2.6.0
-pydantic-core==2.16.1
-httpx==0.27.0
+fastapi==0.140.13
+starlette==1.3.1
+pydantic==2.13.4
+pydantic-core==2.47.0
+httpx==0.28.1
 httpcore==1.0.9
-anyio==4.3.0
+anyio==4.14.2
