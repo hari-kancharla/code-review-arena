@@ -18,6 +18,22 @@ from arena.reviewers.reference_patch import REFERENCE_PATCH_FILENAME
 def validate_case(case: BenchmarkCase) -> list[str]:
     errors: list[str] = []
     assert case.case_dir is not None
+    # Exposure disclosure. These fire only on an INCOMPLETE or CONTRADICTORY
+    # declaration, never on absence: an undeclared origin is legitimately
+    # unknown, and every already-shipped pack must keep validating. No date is
+    # ever compared against the wall clock -- pack validation stays
+    # deterministic, so the same pack validates identically forever.
+    origin = case.origin
+    if origin is not None:
+        if origin.kind == "authored" and (case.case_dir / "provenance.json").is_file():
+            errors.append(
+                f"{case.id}: origin.kind is 'authored' but the case ships provenance.json "
+                "(a case imported from public history cannot be relabelled as authored)"
+            )
+        if origin.kind == "derived_public" and origin.source_label is None:
+            errors.append(
+                f"{case.id}: a derived_public origin must name the source_label it came from"
+            )
     before_dir = case.case_dir / case.input.before_dir
     after_dir = case.case_dir / case.input.after_dir
     if not before_dir.is_dir():
@@ -32,6 +48,22 @@ def validate_case(case: BenchmarkCase) -> list[str]:
         errors.append(str(exc))
     if case.scoring.weights.total() != 100:
         errors.append(f"{case.id}: scoring weights must sum to 100")
+    # A case that demands a patch but has no way to judge one is unscoreable: it
+    # can never confirm a repair, so it penalises every reviewer identically and
+    # contributes nothing but noise. Catch it at authoring time.
+    # Matches is_execution_backed: `tests_required` alone is a claim, not a
+    # runnable suite. Accepting it here let a case pass validation and then sit
+    # in validated_case_rate as a miss for every reviewer, forever.
+    tests_gate = bool(case.execution.run_tests and case.execution.test_command)
+    if (
+        case.validation.patch_required
+        and not tests_gate
+        and not case.validation.structural_validators
+    ):
+        errors.append(
+            f"{case.id}: patch_required is set but the case has no validation gate "
+            "(no tests and no structural_validators), so a repair can never be confirmed"
+        )
     if case.execution.run_tests and not case.execution.test_command:
         errors.append(f"{case.id}: test_command is required when run_tests is enabled")
     if case.execution.test_command is not None:
