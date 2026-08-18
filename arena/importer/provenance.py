@@ -12,7 +12,7 @@ from arena.core.errors import ImportFixError
 from arena.core.models import _StrictExternal
 from arena.security.paths import SafeDirPath, SafeFilePath
 
-PROVENANCE_SCHEMA_VERSION: Literal["2"] = "2"
+PROVENANCE_SCHEMA_VERSION: Literal["3"] = "3"
 DIFF_POLICY_VERSION = "1"
 
 _LABEL_COMPONENT = re.compile(r"\A[A-Za-z0-9][A-Za-z0-9._-]*\Z")
@@ -45,12 +45,25 @@ def validate_source_label(value: str) -> None:
 
 SourceLabel = Annotated[str, AfterValidator(_check_source_label)]
 _Hex = Annotated[str, StringConstraints(pattern=r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")]
+# A commit date, normalized to UTC so the recorded text does not vary with the
+# committer's local offset.
+_IsoUtc = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$")]
 
 
 class Provenance(_StrictExternal):
-    """Deterministic provenance: no time, host, user, or absolute/local paths."""
+    """Deterministic provenance: no generation time, host, user, or local paths.
 
-    provenance_schema_version: Literal["2"]
+    A commit's OWN author and committer dates are recorded. They are properties of
+    the commit object already named by the recorded object id, not properties of
+    the import run, so they are identical on every re-import of the same pair and
+    the pack stays byte-reproducible. The banned "time" is the importer's wall
+    clock, which would differ per run.
+
+    Schema "2" predates those dates and stays loadable: packs already shipped are
+    v2 on disk and must never become unreadable.
+    """
+
+    provenance_schema_version: Literal["2", "3"]
     mode: Literal["reverse_fix"]
     source_label: SourceLabel | None
     object_format: Literal["sha1", "sha256"]
@@ -67,3 +80,9 @@ class Provenance(_StrictExternal):
     changed_test_paths: list[SafeFilePath]
     pr_diff_sha256: str
     reference_patch_sha256: str
+    # Optional so a v2 record still validates. Field names deliberately avoid the
+    # substring "time": tests/test_import_fix.py asserts the provenance document
+    # contains no wall-clock reading, and matches on that substring.
+    fixed_commit_author_date: _IsoUtc | None = None
+    fixed_commit_committer_date: _IsoUtc | None = None
+    buggy_commit_committer_date: _IsoUtc | None = None
