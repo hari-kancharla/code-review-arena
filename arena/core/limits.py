@@ -133,6 +133,19 @@ IMPORT_MAX_FILE_BYTES = PACK_FILE_BYTES
 IMPORT_SOURCE_PATHS = 256
 IMPORT_SOURCE_LABEL_LEN = 256
 
+# --- Training-data exposure disclosure (see arena/benchmark/exposure.py) ---
+# The smallest cohort that may carry a published pre/post difference. At five
+# cases a difference is noise; raising this to make a number appear is a defect,
+# not a tuning change, and tests/test_exposure.py pins it.
+MIN_COHORT_CASES = 8
+# Symmetric guard band, in days, around a declared knowledge cutoff. Cases inside
+# it join neither cohort. Crawl-to-train lag, backports and post-fix discussion
+# make a hard boundary indefensible. The CLI allows this to be WIDENED (more
+# conservative) but never narrowed.
+DEFAULT_CUTOFF_GRACE_DAYS = 90
+MODEL_CUTOFF_SOURCE_LEN = 512
+UPSTREAM_REF_LEN = 512
+
 GIT_TIMEOUT_SECONDS = 60  # default per-invocation wall-clock budget
 GIT_TIMEOUT_SECONDS_MIN = 1
 GIT_TIMEOUT_SECONDS_MAX = 3600
