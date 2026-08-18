@@ -7,6 +7,7 @@ semantics, determinism, committed-object-only access, and safe rejection.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import textwrap
 from pathlib import Path
@@ -770,7 +771,7 @@ def test_provenance_shape_and_evidence(tmp_path):
     repo, b, f = _make(tmp_path)
     _run(tmp_path, repo, b, f)
     prov = json.loads((tmp_path / "out" / "calc_combine_sign_001" / "provenance.json").read_text())
-    assert prov["provenance_schema_version"] == "2"
+    assert prov["provenance_schema_version"] == "3"
     assert prov["mode"] == "reverse_fix"
     assert prov["source_label"] == "acme/calc"
     assert prov["diff_policy_version"]
@@ -784,6 +785,18 @@ def test_provenance_shape_and_evidence(tmp_path):
     ):
         assert key in prov
     assert "src/calc.py" in prov["changed_source_paths"]
+    # The commits' OWN dates are recorded, normalized to UTC. These are properties
+    # of the commit objects already named above, not of the import run, so they
+    # are identical on every re-import -- unlike a wall-clock reading, which the
+    # forbidden-substring check below still rules out. Field names deliberately
+    # avoid the substring "time" for exactly that reason.
+    iso_utc = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\+00:00$")
+    for key in (
+        "fixed_commit_author_date",
+        "fixed_commit_committer_date",
+        "buggy_commit_committer_date",
+    ):
+        assert iso_utc.match(prov[key]), f"{key} is not UTC ISO-8601: {prov[key]!r}"
     # Volatile / private fields must never appear.
     text = json.dumps(prov)
     for forbidden in ("hostname", "username", "time", str(repo), str(tmp_path)):
@@ -1114,3 +1127,60 @@ def test_tests_root_rejects_dot_directory(tmp_path):
         load_import_spec(spec)
     assert e.value.reason == "invalid_spec"
     assert "directory path" in str(e.value)
+
+
+def test_the_emitted_case_declares_where_its_answer_came_from(tmp_path):
+    """Every imported case is derived from public history, and says so.
+
+    The date is read from the commit rather than left to a human to remember,
+    because the one field that would let anyone reason about training-data
+    exposure is exactly the field that rots when it lives only in prose.
+    """
+    import yaml
+
+    repo, b, f = _make(tmp_path)
+    _run(tmp_path, repo, b, f)
+    case = yaml.safe_load((tmp_path / "out" / "calc_combine_sign_001" / "case.yaml").read_text())
+
+    origin = case["origin"]
+    assert origin["kind"] == "derived_public"
+    assert origin["source_label"] == "acme/calc"
+    assert re.match(r"^\d{4}-\d{2}-\d{2}$", str(origin["public_fix_date"]))
+    assert origin["public_fix_date_basis"] in {"git_author_date", "git_committer_date"}
+
+
+def test_a_declared_date_later_than_the_commit_is_ignored(tmp_path):
+    """Disagreement resolves toward MORE assumed exposure, never less.
+
+    A spec claiming the fix became public later than its own commit is the
+    flattering direction: it would push a case toward the post-cutoff cohort and
+    make a model look less likely to have memorized it. The commit's own date
+    wins, and the recorded basis says so.
+    """
+    import yaml
+
+    repo, b, f = _make(tmp_path)
+    spec = _spec_file(tmp_path, _SPEC + '\norigin:\n  public_fix_date: "2099-01-01"\n')
+    _run(tmp_path, repo, b, f, out="late", spec=spec)
+    case = yaml.safe_load((tmp_path / "late" / "calc_combine_sign_001" / "case.yaml").read_text())
+
+    assert str(case["origin"]["public_fix_date"]) != "2099-01-01"
+    assert case["origin"]["public_fix_date_basis"] == "min_of_signals"
+
+
+def test_an_earlier_declared_date_is_honoured(tmp_path):
+    """A human can know something Git cannot.
+
+    The defect may have been disclosed in an issue or advisory before the commit
+    that repaired it, and that earlier disclosure is when the answer became
+    readable. This is the one direction a declaration may move the date.
+    """
+    import yaml
+
+    repo, b, f = _make(tmp_path)
+    spec = _spec_file(tmp_path, _SPEC + '\norigin:\n  public_fix_date: "2001-02-03"\n')
+    _run(tmp_path, repo, b, f, out="early", spec=spec)
+    case = yaml.safe_load((tmp_path / "early" / "calc_combine_sign_001" / "case.yaml").read_text())
+
+    assert str(case["origin"]["public_fix_date"]) == "2001-02-03"
+    assert case["origin"]["public_fix_date_basis"] == "declared"

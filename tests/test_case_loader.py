@@ -1,10 +1,11 @@
 from arena.benchmark.case_loader import build_context, load_case, load_cases
 from arena.benchmark.ground_truth import reviewer_safe_metadata
+from tests.conftest import pack_case_count
 
 
-def test_loads_ten_cases(benchmark_dir):
+def test_loads_every_case_the_manifest_declares(benchmark_dir):
     cases = load_cases(benchmark_dir)
-    assert len(cases) == 10
+    assert len(cases) == pack_case_count()
     assert cases[0].id == "fastapi_auth_bypass_001"
 
 
