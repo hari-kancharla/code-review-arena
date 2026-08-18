@@ -63,6 +63,8 @@ class ImportResult:
     repair_changed_paths: list[str] = field(default_factory=list)
     test_changed_paths: list[str] = field(default_factory=list)
     pack_checksum: str = ""
+    public_fix_date: str = ""
+    public_fix_date_basis: str = ""
     validation_ok: bool = False
     contamination_ok: bool = False
     certification: str = "not run"
@@ -198,7 +200,14 @@ def _source_changes(
     return changed
 
 
-def _build_case_yaml(spec: ImportSpec, has_tests: bool) -> str:
+def _build_case_yaml(
+    spec: ImportSpec,
+    has_tests: bool,
+    *,
+    public_fix_date: str,
+    public_fix_date_basis: str,
+    source_label: str | None,
+) -> str:
     case = spec.to_case()
     ground_truth = spec.ground_truth.model_dump(mode="json")
     ground_truth.pop("primary_bug", None)
@@ -219,6 +228,20 @@ def _build_case_yaml(spec: ImportSpec, has_tests: bool) -> str:
         "validation": spec.validation.model_dump(mode="json"),
         "metrics": spec.metrics.model_dump(mode="json"),
     }
+    # Every imported case is by construction derived from public history, so it
+    # is stamped as such here rather than left to a human to remember. safe_dump
+    # renders this str as a quoted scalar; even if it did not, CaseOrigin's
+    # before-validator accepts PyYAML's native date, so both spellings load.
+    origin_doc: dict[str, object] = {
+        "kind": "derived_public",
+        "public_fix_date": public_fix_date,
+        "public_fix_date_basis": public_fix_date_basis,
+    }
+    if source_label is not None:
+        origin_doc["source_label"] = source_label
+    if spec.origin is not None and spec.origin.upstream_ref is not None:
+        origin_doc["upstream_ref"] = spec.origin.upstream_ref
+    case_doc["origin"] = origin_doc
     return yaml.safe_dump(case_doc, sort_keys=True, default_flow_style=False)
 
 
@@ -341,6 +364,8 @@ def import_fix(
     with g.open_repo(Path(repo_path)) as repo:
         buggy = g.resolve_commit(repo, buggy_commit)
         fixed = g.resolve_commit(repo, fixed_commit)
+        fixed_author_date, fixed_committer_date = g.commit_dates(repo, fixed)
+        _buggy_author_date, buggy_committer_date = g.commit_dates(repo, buggy)
         base = g.merge_base(repo, buggy, fixed)
         if base is None:
             raise ImportFixError("commits_unrelated", "buggy and fixed commits are unrelated")
@@ -459,7 +484,36 @@ def import_fix(
             changed_test_paths=test_changed,
             pr_diff_sha256=pr_diff_sha,
             reference_patch_sha256=reference_sha,
+            fixed_commit_author_date=fixed_author_date,
+            fixed_commit_committer_date=fixed_committer_date,
+            buggy_commit_committer_date=buggy_committer_date,
         )
+
+        # When the fix became public, as a calendar date. Both signals are
+        # "YYYY-MM-DDT...", so the string min is the chronological min and the
+        # first ten characters are the date.
+        git_date = min(fixed_author_date, fixed_committer_date)[:10]
+        # Name the signal that actually won. A commit that was authored days
+        # before it landed (rebase, a long review) has an earlier author date,
+        # and recording that as "git_committer_date" would misattribute the one
+        # fact this field exists to make checkable.
+        git_basis = (
+            "git_author_date" if fixed_author_date <= fixed_committer_date else "git_committer_date"
+        )
+        declared = spec.origin.public_fix_date if spec.origin is not None else None
+        if declared is None:
+            effective_date, date_basis = git_date, git_basis
+        elif declared < git_date:
+            # A human knows something Git cannot: the issue or discussion that
+            # disclosed the defect predates the commit that fixed it.
+            effective_date, date_basis = declared, "declared"
+        elif declared > git_date:
+            # A declared date LATER than the commit's own is the flattering
+            # direction ("this case is newer, therefore clean"). Disagreement
+            # always resolves toward more assumed exposure, never less.
+            effective_date, date_basis = git_date, "min_of_signals"
+        else:
+            effective_date, date_basis = git_date, git_basis
 
         _validate_output_parent(output.parent)
         try:
@@ -506,7 +560,13 @@ def import_fix(
             )
             _write_exact(
                 case_dir / "case.yaml",
-                _build_case_yaml(spec, bool(tests_materialize)).encode("utf-8"),
+                _build_case_yaml(
+                    spec,
+                    bool(tests_materialize),
+                    public_fix_date=effective_date,
+                    public_fix_date_basis=date_basis,
+                    source_label=source_label,
+                ).encode("utf-8"),
                 0o644,
             )
             _write_exact(
@@ -554,6 +614,8 @@ def import_fix(
         repair_changed_paths=sorted(repair_set),
         test_changed_paths=test_changed,
         pack_checksum=checksum,
+        public_fix_date=effective_date,
+        public_fix_date_basis=date_basis,
         validation_ok=True,
         contamination_ok=True,
         certification="not run",
