@@ -16,6 +16,7 @@ import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 from arena.core import limits
@@ -120,6 +121,36 @@ def resolve_commit(repo: Repo, oid: str) -> str:
     if verified != oid:
         raise ImportFixError("invalid_commit_object", "commit id did not resolve to itself")
     return oid
+
+
+def commit_dates(repo: Repo, oid: str) -> tuple[str, str]:
+    """(author_date, committer_date) of a commit, ISO-8601 normalized to UTC.
+
+    A commit's own dates are part of the commit object and are therefore already
+    covered by the object id recorded in provenance. They are NOT the volatile
+    wall-clock, host or user data that Provenance bans -- that ban is about the
+    import RUN -- so reading them leaves the importer byte-deterministic for a
+    given commit pair.
+
+    They are, however, self-reported: settable through GIT_COMMITTER_DATE and
+    rewritten by rebase. They bound when the commit OBJECT existed, not when the
+    fix became publicly readable, which is why callers take the earlier of the
+    two signals and why the recorded basis names which signal won.
+    """
+    out = _text(_git(repo, ["show", "-s", "--format=%aI%n%cI", oid], "git_failed"))
+    lines = [line for line in out.splitlines() if line.strip()]
+    if len(lines) != 2:
+        raise ImportFixError("invalid_commit_date", "commit did not report both of its dates")
+    rendered: list[str] = []
+    for line in lines:
+        try:
+            parsed = datetime.fromisoformat(line.strip())
+        except ValueError as exc:
+            raise ImportFixError("invalid_commit_date", "commit date is not ISO-8601") from exc
+        if parsed.tzinfo is None:
+            raise ImportFixError("invalid_commit_date", "commit date carries no offset")
+        rendered.append(f"{parsed.astimezone(UTC):%Y-%m-%dT%H:%M:%S}+00:00")
+    return rendered[0], rendered[1]
 
 
 def is_ancestor(repo: Repo, ancestor: str, descendant: str) -> bool:
