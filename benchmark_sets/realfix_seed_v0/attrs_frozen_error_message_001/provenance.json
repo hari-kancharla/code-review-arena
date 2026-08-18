@@ -1,5 +1,6 @@
 {
   "buggy_commit": "eccd966d80aff5196efc959316961cfa780439f9",
+  "buggy_commit_committer_date": "2026-03-14T13:04:04+00:00",
   "buggy_source_files": [
     "src/attr/__init__.py",
     "src/attr/__init__.pyi",
@@ -33,6 +34,8 @@
   ],
   "diff_policy_version": "1",
   "fixed_commit": "ce89f5d11feb0805da9ed10bb165238cc959f1bb",
+  "fixed_commit_author_date": "2026-03-14T13:14:10+00:00",
+  "fixed_commit_committer_date": "2026-03-14T13:14:10+00:00",
   "fixed_source_files": [
     "src/attr/__init__.py",
     "src/attr/__init__.pyi",
@@ -96,7 +99,7 @@
   "mode": "reverse_fix",
   "object_format": "sha1",
   "pr_diff_sha256": "902ef68df295946567d37866c1abf285bf99e55121b2bcad54fac0accd9cf390",
-  "provenance_schema_version": "2",
+  "provenance_schema_version": "3",
   "reference_patch_sha256": "f4ad5c046e0c8d5d4cf504afb75d927f7eab53525e94b01a9482137bd3f50b40",
   "source_label": "python-attrs/attrs",
   "source_paths": [

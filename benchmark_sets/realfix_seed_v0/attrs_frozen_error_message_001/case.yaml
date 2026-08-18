@@ -44,6 +44,11 @@ input:
   tests_dir: tests
 metrics:
   beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-03-14'
+  public_fix_date_basis: git_author_date
+  source_label: python-attrs/attrs
 scoring:
   false_positive_penalty: 5.0
   false_positive_penalty_cap: 15.0

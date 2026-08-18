@@ -1,5 +1,6 @@
 {
   "buggy_commit": "fe55a131c2780fa856464ad04d7d6dc8a1079b72",
+  "buggy_commit_committer_date": "2026-01-23T10:36:23+00:00",
   "buggy_source_files": [
     "rich/__init__.py",
     "rich/__main__.py",
@@ -112,6 +113,8 @@
   ],
   "diff_policy_version": "1",
   "fixed_commit": "1c5e03eb32020011f5b13174e186c588d09d749c",
+  "fixed_commit_author_date": "2026-01-23T11:20:32+00:00",
+  "fixed_commit_committer_date": "2026-01-23T11:20:32+00:00",
   "fixed_source_files": [
     "rich/__init__.py",
     "rich/__main__.py",
@@ -289,7 +292,7 @@
   "mode": "reverse_fix",
   "object_format": "sha1",
   "pr_diff_sha256": "ed9f4e5adb3613cd2c9baf5f8985ae9cc52b3a9ef4d9998eed5afb8a996aaac0",
-  "provenance_schema_version": "2",
+  "provenance_schema_version": "3",
   "reference_patch_sha256": "4018404b3c3e1881a4d36be241b6d7e7f0cc5de5fe3011dc71f70ccdbbc7b4d5",
   "source_label": "Textualize/rich",
   "source_paths": [
