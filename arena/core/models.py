@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import date as _date
 from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -73,6 +74,20 @@ class _StrictExternal(BaseModel):
 BoundedConcept = Annotated[str, StringConstraints(min_length=1, max_length=limits.CONCEPT_LEN)]
 BoundedPhrase = Annotated[str, StringConstraints(min_length=1, max_length=limits.PHRASE_LEN)]
 BoundedName = Annotated[str, StringConstraints(min_length=1, max_length=limits.IDENTIFIER_LEN)]
+# An ISO calendar date as a REGEX-PINNED STRING, never a datetime.date.
+# _StrictExternal sets strict=True, and PyYAML resolves an unquoted 2026-03-14 to
+# datetime.date but a quoted "2026-03-14" to str -- so either native type would
+# reject one of the two legal YAML spellings. A before-validator on each field
+# normalizes a bare date to its ISO string so both load, while a datetime (which
+# carries a clock reading the pack has no business pinning) is still rejected.
+IsoDate = Annotated[str, StringConstraints(pattern=r"^\d{4}-\d{2}-\d{2}$")]
+
+
+def _iso_date_before(value: Any) -> Any:
+    """Normalize PyYAML's native date to its ISO string; leave everything else."""
+    if isinstance(value, _date) and not isinstance(value, datetime):
+        return value.isoformat()
+    return value
 
 
 class LineRange(_StrictExternal):
@@ -275,6 +290,49 @@ class MetricsConfig(_StrictExternal):
     beta: float = Field(default=1.0, gt=0, le=limits.BETA_MAX)
 
 
+ExposureCohort = Literal["pre_cutoff", "post_cutoff", "undetermined", "not_applicable"]
+
+
+class CaseOrigin(_StrictExternal):
+    """Where this case's answer came from, and when it first became public.
+
+    This is a DISCLOSURE of prior-exposure risk, never a cleanliness claim. A
+    case with ``kind: authored`` was written for this benchmark; ``derived_public``
+    was built from a public upstream fix whose answer -- the patch, its regression
+    test, and usually a pull-request discussion explaining it -- is plausibly in
+    the pretraining corpus of any model under evaluation. ``unknown`` is the
+    fail-closed default: absence of a declaration is absence of evidence, and is
+    never read as a claim of safety.
+
+    Distinct from arena/benchmark/contamination.py, which asks the unrelated
+    question of whether a case leaks its own answer inside the pack.
+    """
+
+    kind: Literal["authored", "derived_public", "unknown"] = "unknown"
+    public_fix_date: IsoDate | None = None
+    public_fix_date_basis: Literal[
+        "git_committer_date", "git_author_date", "declared", "min_of_signals", "unknown"
+    ] = "unknown"
+    source_label: (
+        Annotated[str, StringConstraints(max_length=limits.IMPORT_SOURCE_LABEL_LEN)] | None
+    ) = None
+    upstream_ref: Annotated[str, StringConstraints(max_length=limits.UPSTREAM_REF_LEN)] | None = (
+        None
+    )
+
+    _normalize_date = field_validator("public_fix_date", mode="before")(_iso_date_before)
+
+    @model_validator(mode="after")
+    def _check_kind_date_agreement(self) -> CaseOrigin:
+        if self.kind == "authored" and self.public_fix_date is not None:
+            raise ValueError("an authored case has no upstream public fix date")
+        if self.kind == "derived_public" and self.public_fix_date is None:
+            raise ValueError("a derived_public case must declare public_fix_date")
+        if self.public_fix_date is not None and self.public_fix_date_basis == "unknown":
+            raise ValueError("public_fix_date requires a public_fix_date_basis")
+        return self
+
+
 class BenchmarkCase(_StrictExternal):
     id: SafeCaseId
     title: Annotated[str, StringConstraints(min_length=1, max_length=limits.TITLE_LEN)]
@@ -288,6 +346,9 @@ class BenchmarkCase(_StrictExternal):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    # Optional so every already-shipped case keeps loading under extra="forbid".
+    # Absent means undeclared, which is treated as unknown, never as clean.
+    origin: CaseOrigin | None = None
     # Runtime state assigned by the loader after validation, not pack-controlled
     # input. Kept excluded from serialization; _reject_runtime_fields rejects any
     # attempt to set it from a case.yaml document (see below).
@@ -320,6 +381,18 @@ class CaseManifest(_StrictExternal):
     default_docker_image: (
         Annotated[str, StringConstraints(max_length=limits.DOCKER_IMAGE_REF_LEN)] | None
     ) = None
+    # The date this pack's contents first became publicly readable. Once the
+    # repository holding it is public the PACK is its own exposure channel:
+    # case.yaml carries must_mention and acceptable_fix_keywords, and
+    # reference.patch carries the gold answer outright. When set, a case's
+    # effective exposure date is min(origin.public_fix_date, published_date).
+    published_date: IsoDate | None = None
+    # Applied to every case whose origin.kind is still "unknown", mirroring
+    # default_docker_image, so an authored pack can declare once rather than
+    # repeating itself in ten case files.
+    default_origin_kind: Literal["authored", "derived_public"] | None = None
+
+    _normalize_published_date = field_validator("published_date", mode="before")(_iso_date_before)
 
     @model_validator(mode="after")
     def _reject_duplicate_case_ids(self) -> CaseManifest:
@@ -576,19 +649,30 @@ class DeterministicMetrics(BaseModel):
     validated_f1: float = 0.0
     validated_f_beta: float = 0.0
     beta: float
-    deterministic_pass_rate: float = 0.0
+    # None, not 0.0, when the run had no execution-backed case to measure: a
+    # rate over an empty denominator is not "repaired nothing", it is "not
+    # measured", and publishing 0.0 fabricates a result. The default stays 0.0 so
+    # run JSON written before this distinction still loads unchanged.
+    deterministic_pass_rate: float | None = 0.0
     # Canonical, unit-coherent case-level repair metric: validated cases over
     # eligible cases (numerically equal to deterministic_pass_rate, which stays
     # as a legacy alias). This is the default leaderboard sort.
-    validated_case_rate: float = 0.0
+    validated_case_rate: float | None = 0.0
     # Wilson 95% confidence interval for validated_case_rate. Wide at the small
     # pack sizes here (10 cases), so overlapping intervals mean two reviewers are
     # not reliably ranked. None when there are no validation-eligible cases.
     validated_case_rate_ci_low: float | None = None
     validated_case_rate_ci_high: float | None = None
+    # The denominator behind validated_case_rate, published so a reader never has
+    # to guess what the rate is "out of", plus the cases it could not cover
+    # (those with no runnable suite -- judged by a structural validator, or not
+    # judged at all). Together they account for every scored case. Optional with
+    # defaults: run JSON written before these existed still loads.
+    validated_eligible_case_count: int | None = None
+    non_execution_backed_case_count: int | None = None
     # Evidence-derived dimensions (see docs/metrics.md, "Evidence dimensions"):
     # Repair Success -- cases the patch fully repaired (case unit).
-    complete_repair_rate: float = 0.0
+    complete_repair_rate: float | None = 0.0
     # Review Accuracy -- cases where every seeded bug was detected (case unit).
     bug_completeness_rate: float = 0.0
     # Review Trustworthiness -- of the findings that count (excluding neutral
@@ -643,6 +727,14 @@ class CaseResult(BaseModel):
     context_truncated: bool = False
     test_output: str = ""
     deterministic_case_score: DeterministicCaseScore | None = None
+    # Training-data exposure disclosure (see arena/benchmark/exposure.py).
+    # Persisted PER CASE so a third party can recompute the whole analysis from a
+    # stored run.json at a different cutoff or guard band, with no reviewer calls
+    # and no access to the pack.
+    exposure_date: str | None = None
+    exposure_date_basis: str | None = None
+    exposure_cohort: ExposureCohort | None = None
+    exposure_cohort_reason: str | None = None
     patch_provided: bool = False
     patch_applied: bool = False
     patch_error: str | None = None
@@ -683,6 +775,48 @@ class CaseResult(BaseModel):
     execution_unavailable: bool = False
 
 
+class CohortResult(BaseModel):
+    """One exposure cohort's slice of validated_case_rate."""
+
+    cohort: ExposureCohort
+    eligible_case_count: int
+    validated_case_count: int
+    validated_case_rate: float | None = None
+    ci_low: float | None = None
+    ci_high: float | None = None
+
+
+class ExposureMetrics(BaseModel):
+    """Cohort composition, and the pre/post difference only when it is powered.
+
+    This is NOT a measurement of memorization. `exposure_gap` describes a split
+    that is confounded with case difficulty, repository, language and era,
+    because cases are not randomly assigned to cohorts -- at small pack sizes
+    cohort membership is close to collinear with which repository a case came
+    from, which is why `source_composition` is published beside it.
+
+    `publishable` is false whenever `suppression_reasons` is non-empty, and the
+    cohort counts are published either way: the composition is a fact about the
+    run, and hiding it would be the opposite of the point.
+    """
+
+    analysis_version: int = 1
+    declared_cutoff: str | None = None
+    cutoff_basis: str | None = None
+    cutoff_grace_days: int | None = None
+    reviewer_retrieval: str = "unknown"
+    cohorts: list[CohortResult] = Field(default_factory=list)
+    cohort_reason_counts: dict[str, int] = Field(default_factory=dict)
+    source_composition: dict[str, dict[str, int]] = Field(default_factory=dict)
+    exposure_gap: float | None = None
+    exposure_gap_ci_low: float | None = None
+    exposure_gap_ci_high: float | None = None
+    min_detectable_gap: float | None = None
+    publishable: bool = False
+    suppression_reasons: list[str] = Field(default_factory=list)
+    exposure_analysis_key: str = ""
+
+
 class RunMetadata(BaseModel):
     prompt_version: str
     benchmark_version: str
@@ -695,6 +829,30 @@ class RunMetadata(BaseModel):
     # True when the reviewer was given pre-patch test/static-analysis output
     # (an openly test-assisted run, not a blind code review).
     test_assisted: bool = False
+    # True when the reviewer could reach the pack's answer key while reviewing --
+    # a custom-command wrapper runs as a host process and can simply read
+    # reference.patch, the hidden tests and case.yaml, and reference-patch does so
+    # by design. Such a score measures filesystem access, not review skill: a
+    # wrapper that reads the oracle and echoes it scores a perfect 1.000 on every
+    # metric. Default leaderboard eligibility therefore requires this to be False.
+    # None on runs written before the field existed (unknown, treated as unsafe).
+    reviewer_oracle_reachable: bool | None = None
+    # An operator-declared, UNVERIFIABLE claim about the evaluated model. The
+    # harness never infers a cutoff from a model id and never asserts one itself;
+    # it records the claim with its basis and citation so a reader can judge it.
+    model_knowledge_cutoff: IsoDate | None = None
+    model_knowledge_cutoff_basis: Literal["vendor_documented", "operator_estimate"] | None = None
+    model_knowledge_cutoff_source: (
+        Annotated[str, StringConstraints(max_length=limits.MODEL_CUTOFF_SOURCE_LEN)] | None
+    ) = None
+    cutoff_grace_days: int | None = None
+    # Whether the reviewer could search the web while reviewing. Live retrieval
+    # defeats any cutoff argument entirely, and for a custom-command reviewer
+    # running as a host process the harness cannot prove otherwise -- so the
+    # DEFAULT is the untrusted value. Disclosure only: deliberately not part of
+    # leaderboard eligibility, because gating on a self-declared field rewards
+    # declaring whatever is convenient.
+    reviewer_retrieval: Literal["none", "enabled", "unknown"] = "unknown"
     pack_checksum: str | None = None
     # True/False when the pack ships a pack.sha256 to compare against; None otherwise.
     # This is SELF-consistency only: pack.sha256 lives inside the pack, so an edited
@@ -726,6 +884,22 @@ class RunMetadata(BaseModel):
     # default-comparable; invalid alone does NOT make a run non-comparable.
     non_exact_output_used: bool | None = None
 
+    @model_validator(mode="after")
+    def _cutoff_claim_requires_attribution(self) -> RunMetadata:
+        """A cutoff without a basis and a citation is not a claim, it is a number.
+
+        Recording one anyway would let a run publish a cohort split resting on an
+        assertion nobody can check or attribute.
+        """
+        declared = (
+            self.model_knowledge_cutoff,
+            self.model_knowledge_cutoff_basis,
+            self.model_knowledge_cutoff_source,
+        )
+        if any(v is not None for v in declared) and not all(v is not None for v in declared):
+            raise ValueError("a knowledge-cutoff claim must carry both its basis and its source")
+        return self
+
 
 class RunResult(BaseModel):
     run_id: str
@@ -753,6 +927,10 @@ class RunResult(BaseModel):
     mode: Literal["review", "patch", "full"] = "review"
     beta: float = 1.0
     deterministic_metrics: DeterministicMetrics | None = None
+    # A SIBLING of deterministic_metrics, never a field inside it:
+    # DeterministicMetrics carries a mode="before" legacy-name compatibility path
+    # that must not be disturbed by a new nested object.
+    exposure_metrics: ExposureMetrics | None = None
     bugs_found: int
     correct_files: int
     correct_lines: int
@@ -786,4 +964,37 @@ class RunResult(BaseModel):
         expected_non_exact = any(status in {"tolerant", "repaired"} for status in actual)
         if self.metadata.non_exact_output_used != expected_non_exact:
             raise ValueError("non_exact_output_used disagrees with case parse statuses")
+        return self
+
+    @model_validator(mode="after")
+    def _check_exposure_cohort_consistency(self) -> RunResult:
+        """An edited run.json cannot move or drop a case between cohorts.
+
+        Fires only when exposure_metrics is present, so every historical run and
+        every review-mode run passes through unchanged.
+        """
+        exposure = self.exposure_metrics
+        if exposure is None:
+            return self
+        if self.deterministic_metrics is None:
+            raise ValueError("exposure metrics require deterministic metrics")
+        counted = sum(item.eligible_case_count for item in exposure.cohorts)
+        expected = self.deterministic_metrics.validated_eligible_case_count
+        if counted != expected:
+            raise ValueError(
+                f"exposure cohorts cover {counted} cases but the run reports "
+                f"{expected} validation-eligible cases"
+            )
+        sizes = {item.cohort: item.eligible_case_count for item in exposure.cohorts}
+        powered = (
+            sizes.get("pre_cutoff", 0) >= limits.MIN_COHORT_CASES
+            and sizes.get("post_cutoff", 0) >= limits.MIN_COHORT_CASES
+        )
+        if exposure.exposure_gap is not None and not powered:
+            raise ValueError(
+                "an exposure gap cannot be published for cohorts below "
+                f"{limits.MIN_COHORT_CASES} cases"
+            )
+        if exposure.suppression_reasons and exposure.publishable:
+            raise ValueError("a suppressed exposure analysis cannot be marked publishable")
         return self
