@@ -16,6 +16,7 @@ from arena.core.models import (
     BenchmarkCase,
     CaseInput,
     CaseManifest,
+    CaseOrigin,
     ExecutionConfig,
     Finding,
     GroundTruth,
@@ -80,6 +81,7 @@ VALID_KWARGS = {
     ExecutionConfig: {},
     ValidationConfig: {},
     MetricsConfig: {},
+    CaseOrigin: {},
     BenchmarkCase: _CASE,
     CaseManifest: _MANIFEST,
     Finding: _finding(),
@@ -348,3 +350,54 @@ def test_dedicated_numeric_limits_boundaries():
         CreateRunRequest(max_wall_seconds=limits.API_WALL_SECONDS_MAX + 1)
     with pytest.raises(ValidationError):
         CreateRunRequest(beta=limits.BETA_MAX + 1)
+
+
+def test_case_origin_accepts_both_yaml_date_spellings_and_rejects_a_clock():
+    """PyYAML resolves the two legal spellings of a date to different types.
+
+    An unquoted `2026-03-14` becomes `datetime.date`; a quoted `"2026-03-14"`
+    stays `str`. Under strict=True a `str` field rejects the first and a `date`
+    field rejects the second, so a pack author's choice of quoting would decide
+    whether their case loads. The before-validator normalizes the native date
+    while still refusing a `datetime`, which carries a clock reading that a pack
+    has no business pinning.
+    """
+    import datetime
+
+    quoted = CaseOrigin(
+        kind="derived_public", public_fix_date="2026-03-14", public_fix_date_basis="declared"
+    )
+    unquoted = CaseOrigin(
+        kind="derived_public",
+        public_fix_date=datetime.date(2026, 3, 14),
+        public_fix_date_basis="declared",
+    )
+
+    assert quoted.public_fix_date == unquoted.public_fix_date == "2026-03-14"
+
+    with pytest.raises(ValidationError):
+        CaseOrigin(
+            kind="derived_public",
+            public_fix_date=datetime.datetime(2026, 3, 14, 1, 2, 3),
+            public_fix_date_basis="declared",
+        )
+    with pytest.raises(ValidationError):
+        CaseOrigin(
+            kind="derived_public", public_fix_date="2026-3-14", public_fix_date_basis="declared"
+        )
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        # An authored case cannot also carry an upstream publication date.
+        {"kind": "authored", "public_fix_date": "2026-03-14", "public_fix_date_basis": "declared"},
+        # A case derived from public history must say when it became public.
+        {"kind": "derived_public"},
+        # A date with no stated basis is an unattributable claim.
+        {"kind": "derived_public", "public_fix_date": "2026-03-14"},
+    ],
+)
+def test_case_origin_rejects_incoherent_declarations(kwargs):
+    with pytest.raises(ValidationError):
+        CaseOrigin(**kwargs)
