@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, StringConstraints
+from pydantic import Field, StringConstraints, field_validator
 
 from arena.core import limits
 from arena.core.bounded_io import read_yaml_mapping_bounded
@@ -23,10 +23,12 @@ from arena.core.models import (
     CaseInput,
     ExecutionConfig,
     GroundTruth,
+    IsoDate,
     MetricsConfig,
     ScoringConfig,
     Severity,
     ValidationConfig,
+    _iso_date_before,
     _StrictExternal,
 )
 from arena.security.paths import SafeCaseId, SafeDirPath, SafeFilePath
@@ -51,6 +53,24 @@ class _ImportCase(_StrictExternal):
     description: _Description
 
 
+class _ImportOrigin(_StrictExternal):
+    """Optional exposure facts a human knows that Git cannot supply.
+
+    The importer derives the fix date from the commit itself. This block exists
+    for the case where the defect became public EARLIER than the fix landed --
+    an issue report or a security advisory that named it. A declared date later
+    than the commit's own is ignored in favour of the commit's, because that is
+    the direction that would flatter the case.
+    """
+
+    public_fix_date: IsoDate | None = None
+    upstream_ref: Annotated[str, StringConstraints(max_length=limits.UPSTREAM_REF_LEN)] | None = (
+        None
+    )
+
+    _normalize_date = field_validator("public_fix_date", mode="before")(_iso_date_before)
+
+
 class ImportSpec(_StrictExternal):
     """The complete, human-authored semantic specification for one imported case."""
 
@@ -64,6 +84,9 @@ class ImportSpec(_StrictExternal):
     execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
     validation: ValidationConfig = Field(default_factory=ValidationConfig)
     metrics: MetricsConfig = Field(default_factory=MetricsConfig)
+    # Purely additive and optional, so every already-written spec still loads
+    # against schema_version "1".
+    origin: _ImportOrigin | None = None
 
     def to_case(self) -> BenchmarkCase:
         """Build the BenchmarkCase exactly as a normal pack would declare it."""
