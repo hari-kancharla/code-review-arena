@@ -1,6 +1,6 @@
 # Reference Patches
 
-Every case in both packs includes a `reference.patch` file containing a canonical
+Every case in every shipped pack includes a `reference.patch` file containing a canonical
 known-good fix for the buggy `after/` tree. The patch is stored as an inspectable unified
 diff and is expected to apply cleanly, pass required regression tests, and satisfy
 structural validators.
