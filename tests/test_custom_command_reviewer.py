@@ -1,5 +1,6 @@
 import inspect
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -86,6 +87,29 @@ def test_timeout_command_fails_safely(audit_benchmark_dir):
     response = reviewer.review(context)
     assert response.invalid_output is True
     assert "timed out" in response.raw_response
+
+
+def test_custom_command_pins_python_to_harness_interpreter(audit_benchmark_dir, monkeypatch):
+    from arena.execution.process import SupervisedResult
+
+    captured: list[list[str]] = []
+
+    def fake_run_supervised(args, **kwargs):
+        captured.append(list(args))
+        payload = '{"findings": [], "overall_risk": "none", "review_summary": "ok"}'
+        return SupervisedResult(returncode=0, stdout=payload, stderr="", timed_out=False)
+
+    monkeypatch.setattr("arena.reviewers.custom_command.run_supervised", fake_run_supervised)
+    case = load_cases(audit_benchmark_dir)[0]
+    context = build_context(case)
+    reviewer = CustomCommandReviewer(
+        f"python {VALID_REVIEWER} --case {{case_json}}",
+        timeout_seconds=30,
+    )
+    response = reviewer.review(context)
+    assert response.invalid_output is False
+    assert captured
+    assert captured[0][0] == sys.executable
 
 
 def test_custom_command_does_not_use_shell_true():

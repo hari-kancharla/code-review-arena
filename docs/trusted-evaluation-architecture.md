@@ -78,7 +78,9 @@ official rankings.
 - No held-out official packs; public packs contain their own answers. An internally
   consistent snapshot does not make a self-reported run official; the external trust
   anchor is still a pinned, out-of-band expected digest (`--expected-pack-sha256`).
-- Docker "verified path" is documented but not exercised end to end in CI.
+- Docker "verified path" is exercised in CI's Docker job (sandbox image build,
+  `tests/test_docker_execution.py`, and RealFix seed certification). Reviewer
+  isolation is still missing, so Docker execution does not make a run official.
 - Per-bug repair attribution is suite-level (overstated for multi-bug cases).
 - Snapshot mutation detection bounds the source filesystem at copy time but cannot prove
   the absence of every concurrent-modification race; it fails closed when one is detected.

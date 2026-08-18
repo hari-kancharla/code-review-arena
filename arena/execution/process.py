@@ -88,16 +88,20 @@ def _run_posix(
     # Binary, unbuffered pipes: we count bytes, cap incrementally, and decode
     # ourselves with replacement, so a flood cannot exhaust parent memory and
     # raw bytes never raise UnicodeDecodeError.
-    process = subprocess.Popen(
-        args,
-        cwd=cwd,
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        bufsize=0,
-        start_new_session=True,  # own session => own process group for tree-kill
-        preexec_fn=preexec_fn,
-    )
+    try:
+        process = subprocess.Popen(
+            args,
+            cwd=cwd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
+            start_new_session=True,  # own session => own process group for tree-kill
+            preexec_fn=preexec_fn,
+        )
+    except FileNotFoundError as exc:
+        program = args[0] if args else ""
+        raise ExecutionError(f"command not found: {program}") from exc
     # start_new_session makes the child a session and group leader, so the group
     # id is its own pid. Captured now because os.getpgid stops working the moment
     # the child is reaped, which is exactly when the clean-exit sweep runs.

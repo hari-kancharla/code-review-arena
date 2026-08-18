@@ -18,6 +18,17 @@ def _path_env() -> dict[str, str]:
     return {"PATH": os.environ.get("PATH", "")}
 
 
+@posix_only
+def test_run_supervised_missing_executable_raises_execution_error(tmp_path):
+    with pytest.raises(ExecutionError, match="command not found"):
+        run_supervised(
+            ["definitely-not-a-command-xyz"],
+            cwd=tmp_path,
+            env=_path_env(),
+            timeout=5,
+        )
+
+
 def test_run_supervised_fails_closed_on_windows(monkeypatch):
     # Windows has no tree-kill or byte cap here, so command execution must fail
     # closed rather than run unbounded. Patch the platform so this is verified on

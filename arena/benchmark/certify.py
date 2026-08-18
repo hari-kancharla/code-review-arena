@@ -149,6 +149,17 @@ def _is_pytest_command(test_command: str | list[str] | list[list[str]] | None) -
     return is_pytest_command(test_command)
 
 
+def _pytest_failed_to_start(result: TestExecutionResult) -> bool:
+    """True when the interpreter never launched pytest (not a genuine test fail).
+
+    ``python -m pytest`` exits 1 with ``No module named pytest`` when the
+    module is missing. That is the same code pytest uses for "tests ran and
+    failed", so it must not count as a seeded-bug baseline failure.
+    """
+    blob = f"{result.stderr}\n{result.stdout}"
+    return "No module named pytest" in blob
+
+
 def _baseline_fails(result: TestExecutionResult | None, *, pytest_command: bool) -> bool:
     if not (result and result.ran and not result.timed_out and not result.passed):
         return False
@@ -156,6 +167,8 @@ def _baseline_fails(result: TestExecutionResult | None, *, pytest_command: bool)
     # genuinely failed (nonzero, not a timeout) is accepted, since we cannot
     # portably tell its collection error from its test failure.
     if pytest_command:
+        if _pytest_failed_to_start(result):
+            return False
         return result.exit_code == _PYTEST_GENUINE_FAILURE_EXIT_CODE
     return True
 
