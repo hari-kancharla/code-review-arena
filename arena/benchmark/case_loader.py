@@ -12,7 +12,13 @@ from arena.benchmark.diff_loader import load_diff
 from arena.core.bounded_io import read_text_capped, read_yaml_mapping_bounded
 from arena.core.errors import ValidationError
 from arena.core.limits import CASE_YAML_BYTES, MANIFEST_BYTES, PACK_FILE_BYTES
-from arena.core.models import BenchmarkCase, CaseContext, CaseManifest, ReviewerCaseMetadata
+from arena.core.models import (
+    BenchmarkCase,
+    CaseContext,
+    CaseManifest,
+    CaseOrigin,
+    ReviewerCaseMetadata,
+)
 from arena.execution.integrity import find_unsafe_files
 from arena.patching.patch_parser import touched_files
 from arena.security.paths import resolve_under, validate_case_id
@@ -113,6 +119,22 @@ def load_cases(benchmark_dir: Path) -> list[BenchmarkCase]:
         for case in cases:
             if case.execution.docker_image is None:
                 case.execution.docker_image = manifest.default_docker_image
+    if manifest.default_origin_kind:
+        for case in cases:
+            # Only ever fills in an UNDECLARED origin; a case that states its own
+            # kind always wins over the pack default.
+            declared = case.origin
+            if declared is not None and declared.kind != "unknown":
+                continue
+            if manifest.default_origin_kind == "authored":
+                # An authored case carries no upstream date, so this is always a
+                # coherent CaseOrigin.
+                case.origin = CaseOrigin(kind="authored")
+            elif declared is not None and declared.public_fix_date is not None:
+                # derived_public requires a date, which only an already-dated
+                # case can supply. Promoting a dateless case would build a
+                # CaseOrigin its own validator rejects.
+                case.origin = declared.model_copy(update={"kind": "derived_public"})
     return cases
 
 
