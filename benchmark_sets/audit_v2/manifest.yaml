@@ -1,5 +1,9 @@
 version: audit_v2
 name: CodeReview Arena Audit Pack v2
+# Written for this benchmark rather than lifted from public history, so no
+# upstream fix date applies. Not a claim of immunity: once this repository
+# is public the pack is its own answer key, which published_date records.
+default_origin_kind: authored
 cases:
   - money_discount_rounding_001
   - ratelimit_window_boundary_001

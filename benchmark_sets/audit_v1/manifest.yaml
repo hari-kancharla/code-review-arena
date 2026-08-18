@@ -1,5 +1,9 @@
 version: audit_v1
 name: CodeReview Arena Audit Pack v1
+# Written for this benchmark rather than lifted from public history, so no
+# upstream fix date applies. Not a claim of immunity: once this repository
+# is public the pack is its own answer key, which published_date records.
+default_origin_kind: authored
 cases:
   - security_fastapi_multitenant_admin_bypass_001
   - distributed_kafka_duplicate_event_001
