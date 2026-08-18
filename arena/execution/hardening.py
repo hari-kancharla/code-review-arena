@@ -7,7 +7,10 @@ allowed). Three mitigations apply to every locally executed fixture command:
 - the child environment is built from an allowlist instead of inheriting the
   parent environment, so shell secrets and API keys are never exposed;
 - HOME and TMPDIR point at a fresh, empty, per-run temporary directory, so a
-  fixture cannot read ~/.ssh, ~/.aws, ~/.config, or the host temp space;
+  fixture cannot read ~/.ssh, ~/.aws, ~/.config, or the host temp space.
+  Isolated HOME would also hide a ``pip install --user`` site, so the harness
+  interpreter's user-site is restored on PYTHONPATH (with PYTHONNOUSERSITE=1)
+  and pytest stays importable; parent PYTHONPATH is still not forwarded;
 - POSIX resource limits bound CPU time, file size, open files, and process
   count so a runaway or malicious fixture cannot exhaust the host.
 
@@ -18,10 +21,12 @@ security boundary. Use the Docker backend for untrusted packs.
 from __future__ import annotations
 
 import os
+import site
 import sys
 import tempfile
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from pathlib import Path
 
 # Variables forwarded from the parent environment when present. HOME and the
 # temp-dir vars are deliberately excluded: they are replaced with an isolated
@@ -38,12 +43,31 @@ SAFE_ENV_KEYS = (
 )
 
 
+def harness_user_site() -> str | None:
+    """Return this interpreter's user-site directory, if it is in use.
+
+    Isolated HOME would otherwise hide ``~/.local/.../site-packages``, so a
+    ``pip install --user`` pytest (common when system site-packages is not
+    writable) becomes ``No module named pytest``. Computed in the parent
+    before HOME is rewritten.
+    """
+    if not site.ENABLE_USER_SITE:
+        return None
+    user_site = site.getusersitepackages()
+    if isinstance(user_site, str) and Path(user_site).is_dir():
+        return user_site
+    return None
+
+
 def sandbox_env(extra: dict[str, str] | None = None) -> dict[str, str]:
     """Minimal allowlisted environment for fixture subprocesses.
 
     ``ARENA_PASSTHROUGH_ENV`` may name a comma-separated list of additional
     variables to forward explicitly (e.g. a proxy setting a pack's fixtures
     legitimately need). The parent environment is never forwarded wholesale.
+    Isolated HOME hides user-site, so the harness interpreter's user-site is
+    placed on PYTHONPATH and PYTHONNOUSERSITE is set; parent PYTHONPATH is
+    not inherited.
     """
     env = {key: os.environ[key] for key in SAFE_ENV_KEYS if key in os.environ}
     passthrough = os.getenv("ARENA_PASSTHROUGH_ENV", "")
@@ -51,8 +75,16 @@ def sandbox_env(extra: dict[str, str] | None = None) -> dict[str, str]:
         if name in os.environ:
             env[name] = os.environ[name]
     env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTHONNOUSERSITE"] = "1"
     if extra:
         env.update(extra)
+    # Isolated HOME hides user-site. Restore it on PYTHONPATH without inheriting
+    # the parent PYTHONPATH (unless the caller opted in via passthrough/extra).
+    user_site = harness_user_site()
+    if user_site:
+        existing = [part for part in env.get("PYTHONPATH", "").split(os.pathsep) if part]
+        if user_site not in existing:
+            env["PYTHONPATH"] = os.pathsep.join([user_site, *existing])
     return env
 
 

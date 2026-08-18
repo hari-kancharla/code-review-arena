@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import shlex
-import sys
 import time
 from pathlib import Path
 
 from pydantic import BaseModel
 
+from arena.core.errors import ExecutionError
+from arena.execution.commands import pin_interpreter
 from arena.execution.hardening import resource_limiter, sandboxed_home_env
 from arena.execution.process import run_supervised
 
@@ -34,9 +35,7 @@ def run_command(command: str, cwd: Path, timeout_seconds: int) -> CommandResult:
     propagates so the caller fails closed.
     """
     started = time.perf_counter()
-    arguments = shlex.split(command)
-    if arguments and arguments[0] == "pytest":
-        arguments = [sys.executable, "-m", "pytest", *arguments[1:]]
+    arguments = pin_interpreter(shlex.split(command))
     try:
         with sandboxed_home_env() as env:
             result = run_supervised(
@@ -48,6 +47,17 @@ def run_command(command: str, cwd: Path, timeout_seconds: int) -> CommandResult:
                 output_limit=_OUTPUT_LIMIT_BYTES,
             )
     except FileNotFoundError as exc:
+        return CommandResult(
+            command=command,
+            return_code=127,
+            output=f"Command unavailable: {exc}",
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+    except ExecutionError as exc:
+        # Missing executables fail closed as unavailable. Windows fail-closed
+        # ("not supported on Windows") still propagates to the caller.
+        if "command not found" not in str(exc):
+            raise
         return CommandResult(
             command=command,
             return_code=127,

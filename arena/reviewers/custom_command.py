@@ -13,6 +13,7 @@ from pathlib import Path
 from arena.core import limits
 from arena.core.errors import ExecutionError
 from arena.core.models import CaseContext, ReviewerResponse
+from arena.execution.commands import pin_interpreter
 from arena.execution.hardening import sandboxed_home_env
 from arena.execution.process import run_supervised
 from arena.reviewers.base import BaseReviewer
@@ -183,12 +184,14 @@ class CustomCommandReviewer(BaseReviewer):
                 target = workspace / relative_path
                 target.parent.mkdir(parents=True, exist_ok=True)
                 target.write_text(contents, encoding="utf-8")
-            args = expand_command_template(
-                self.command_template,
-                case_json=case_json,
-                diff_file=diff_file,
-                case_id=context.case.id,
-                workspace=workspace,
+            args = pin_interpreter(
+                expand_command_template(
+                    self.command_template,
+                    case_json=case_json,
+                    diff_file=diff_file,
+                    case_id=context.case.id,
+                    workspace=workspace,
+                )
             )
             # Resolve wrapper paths against the caller's directory BEFORE moving
             # the child out of it, so `python scripts/my_reviewer.py` keeps working
@@ -196,6 +199,9 @@ class CustomCommandReviewer(BaseReviewer):
             args = _absolutize(args)
             # Through the supervisor: process-tree cleanup, a byte-bounded output
             # cap, and the Windows-fail-closed boundary, not a bare subprocess.run.
+            # python/python3/pytest are pinned to the harness interpreter so a
+            # wrapper written as ``python script.py`` still runs on hosts that
+            # only ship ``python3``.
             try:
                 with sandboxed_home_env() as env:
                     completed = run_supervised(

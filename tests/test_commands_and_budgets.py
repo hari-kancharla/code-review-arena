@@ -47,6 +47,7 @@ def test_parse_rejects_shell_operators_and_garbage():
 def test_pin_interpreter_normalizes_python_and_pytest():
     assert pin_interpreter(["pytest", "-q"]) == [sys.executable, "-m", "pytest", "-q"]
     assert pin_interpreter(["python", "-m", "pytest"]) == [sys.executable, "-m", "pytest"]
+    assert pin_interpreter(["python3", "script.py"]) == [sys.executable, "script.py"]
     assert pin_interpreter(["npm", "test"]) == ["npm", "test"]
 
 
