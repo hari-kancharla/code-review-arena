@@ -59,8 +59,20 @@ official rankings.
 
 ## Deferred limitations (honest, current state)
 
-- No reviewer isolation yet: `custom-command` runs from the repo cwd with the full host
-  environment and can read `reference.patch`. All current results are self-reported.
+- Reviewer containment, not isolation. `custom-command` now starts in its own payload
+  directory with an allowlisted environment, so it no longer begins inside the repository
+  and is no longer handed the operator's shell credentials. That stops the casual read;
+  it does NOT stop a determined one, because the process still runs on the host and can
+  open `reference.patch` by absolute path. A wrapper that does so scores a perfect 1.000
+  on every metric, which measures filesystem access rather than review skill.
+
+  Because that cannot be prevented without a real isolation boundary, it is *recorded*
+  instead: every run carries `metadata.reviewer_oracle_reachable`, true for any reviewer
+  that could reach the answer key (`custom-command`, and `reference-patch`, which reads it
+  by design). Default leaderboard eligibility requires it to be false, and unknown (an
+  older run) is treated as unsafe. Such runs remain inspectable with
+  `--include-unverified`. All current results are still self-reported; the real fix is the
+  reviewer boundary below.
   The Phase 1C snapshot removes mutable-source TOCTOU from Arena's OWN pack consumers; it
   does NOT sandbox the reviewer process.
 - No held-out official packs; public packs contain their own answers. An internally
