@@ -29,6 +29,11 @@ class AuditSummary(_Strict):
     case_count: int
     reviewers_tested: list[str]
     biggest_detection_validation_gap: AuditGapRef | None = None
+    # Runs the validity policy refused to publish (invalid/partial/failed, or
+    # pre-v2 with unknowable validity). Optional with a default so reports written
+    # by an older harness still validate; schema_version stays 1.0 because adding
+    # an optional field cannot break a reader that does not look for it.
+    excluded_run_count: int = 0
 
 
 class AuditReviewerRow(_Strict):
@@ -47,6 +52,10 @@ class AuditReviewerRow(_Strict):
     bug_completeness_rate: float | None = None
     supported_claim_rate: float | None = None
     deterministic_pass_rate: float | None = None
+    # Denominator behind the rates above: execution-backed cases only. A
+    # consumer that scales a rate back into a count must use this, not the
+    # pack's total case count, or the fraction contradicts the rate.
+    validated_eligible_case_count: int | None = None
     patch_apply_rate: float | None = None
     test_pass_rate: float | None = None
     structural_pass_rate: float | None = None
