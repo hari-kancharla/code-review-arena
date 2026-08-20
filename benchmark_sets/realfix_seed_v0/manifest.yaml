@@ -4,4 +4,6 @@ default_docker_image: arena-realfix-seed:0
 cases:
   - attrs_frozen_error_message_001
   - click_shared_default_precedence_001
+  - packaging_marker_extra_normalization_001
+  - packaging_name_validation_newline_001
   - rich_table_padding_width_001
