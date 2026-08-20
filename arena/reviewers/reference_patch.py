@@ -93,13 +93,6 @@ LOCALIZATION_HINTS: dict[str, tuple[str, str, str, tuple[int, int], str]] = {
         (10, 14),
         "Require an admin dependency and enforce the admin role.",
     ),
-    "spring_boot_null_handling_001": (
-        "Missing records raise an Optional error instead of returning 404.",
-        "missing record Optional not found orElseThrow",
-        "src/main/java/com/acme/orders/OrderService.java",
-        (6, 8),
-        "Use orElseThrow to return NOT_FOUND.",
-    ),
     "graphql_n_plus_one_001": (
         "Customer lookups inside the order map create N+1 queries.",
         "N+1 batching dataloader query loop",
@@ -231,6 +224,9 @@ LOCALIZATION_HINTS: dict[str, tuple[str, str, str, tuple[int, int], str]] = {
 
 
 class ReferencePatchReviewer(BaseReviewer):
+    # Reads the case's reference.patch by design: a fixture/pipeline control,
+    # never a reviewer measurement, so it is marked as an oracle reader.
+    oracle_reachable = True
     name = "reference-patch"
     model = None
 
