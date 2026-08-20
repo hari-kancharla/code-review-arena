@@ -1,0 +1,40 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/1c09ddf30b79428c21aec180f52e10f6dedc1d8a/LICENSE
+buggy_commit: 8a805e3baac2d71958ec0d0beffbe4d51fd5795f
+fixed_commit: 1c09ddf30b79428c21aec180f52e10f6dedc1d8a
+fixed_date: "2026-01-05"
+issue_url: https://github.com/pypa/packaging/pull/1024
+pull_request_url: https://github.com/pypa/packaging/pull/1024
+source_selectors: [src/packaging]
+tests_root: tests
+changed_source_paths: [src/packaging/markers.py]
+changed_test_paths: [tests/test_requirements.py]
+changed_source_line_count: 28
+category: correctness
+evidence_summary: >
+  PR #1024 ("fix: normalize all extras, not just the first one") extracts the
+  per-marker normalization into a helper and maps it over the whole marker list.
+  The buggy implementation inspected and rewrote results[0] only, so an extra that
+  appeared anywhere other than the first position of a marker expression kept its
+  non-canonical spelling.
+why_buggy_behavior_is_wrong: >
+  Extras are compared after canonicalization, so 'extra == "mariadb_connector"' must
+  normalize to 'mariadb-connector' wherever it appears in the expression. Under the
+  buggy code the marker 'python_version >= "3" and extra == "mariadb_connector"' kept
+  the underscore, so it no longer compared equal to the canonical extra name and the
+  optional dependency was silently skipped -- a wrong install with no error.
+fixed_tests_that_exercise_it: >
+  tests/test_requirements.py::test_normalized_requirements asserts that both
+  'mariadb>=1.0.1; extra == "mariadb_connector"' and
+  'mariadb>=1.0.1; python_version >= "3" and extra == "mariadb_connector"' render with
+  the canonical 'mariadb-connector'. The second parameter, where the extra is not the
+  first marker, fails on the buggy tree and passes on the fixed tree. The case also
+  runs tests/test_markers.py so the suite covers the rest of src/packaging/markers.py,
+  which is what gives the case its mutation-kill evidence.
+why_ground_truth_is_supported: >
+  The declared buggy logic (src/packaging/markers.py lines 129-138 in the after/ tree)
+  is exactly the results[0]-only body of _normalize_extra_values that PR #1024 replaces
+  with a list comprehension over every element.
+admission_status: accepted
