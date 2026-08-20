@@ -1,4 +1,33 @@
-# Historical-fix ingestion (`arena import-fix`)
+# Historical-fix ingestion (`arena mine-fixes`, `arena import-fix`)
+
+## Finding candidates first (`arena mine-fixes`)
+
+`import-fix` needs a commit pair and a spec. Finding the pair by hand is the
+reason a real-fix pack grows slowly, so `arena mine-fixes` proposes them:
+
+```bash
+arena mine-fixes --repo /path/to/local/repository --limit 500 --max-files 6
+arena mine-fixes --repo /path/to/repo --json --output candidates.json
+```
+
+A candidate is a **non-merge commit that changed both a test file and a source
+file**. That pairing is the selection rule behind SWE-bench's fail-to-pass
+signal: the tests the fix added are exactly the ones expected to fail at the
+parent and pass at the fix, and the parent is the buggy state a reviewer would be
+shown. Commits touching more than `--max-files` are skipped, because a review
+case is one seeded defect rather than a refactor, and the smallest diffs are
+ranked first since they certify most cleanly.
+
+Mining **proposes**; it never decides. Only `arena certify-pack` decides, by
+running the tests at both commits (baseline fails, reference passes, mutants
+killed). And it never infers semantics: `--json` emits a scaffolded import spec
+with every Git-derivable field filled in (commits, source paths, test paths,
+ground-truth file list) and every semantic field left as an explicit `TODO`, so a
+human writes prose instead of transcribing paths. A guessed category or ground
+truth would silently corrupt the benchmark, which is exactly what the importer's
+contract forbids.
+
+# `arena import-fix`
 
 `arena import-fix` turns a known buggy/fixed commit pair in a **local** Git
 repository into a candidate Code Review Arena pack. It is the first
