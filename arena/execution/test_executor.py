@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path, PurePosixPath
 from typing import ClassVar, Literal
@@ -22,9 +24,47 @@ from arena.execution.commands import (
 )
 from arena.execution.hardening import resource_limiter, sandboxed_home_env
 from arena.execution.process import run_supervised
+from arena.execution.test_evidence import (
+    CONTAINER_EVIDENCE_DIR,
+    is_pytest_command,
+    read_report,
+    report_filename,
+    with_report_flag,
+)
 
 # Cap captured stdout/stderr so a noisy or malicious fixture cannot exhaust memory.
 OUTPUT_LIMIT_BYTES = 512_000
+# Bound every docker CLI query. These run outside run_supervised, so nothing else
+# can preempt them: an unresponsive daemon would hang the whole run. Matches the
+# timeout already used when force-removing a container.
+DOCKER_PROBE_TIMEOUT_SECONDS = 15
+
+
+def _missing_runner(commands: list[list[str]]) -> str | None:
+    """Name of a `-m` test-runner module this interpreter cannot import.
+
+    Local execution pins `pytest`/`python` to the harness's own interpreter, so
+    importability here is exactly what the run will see. Returns None when every
+    command's runner is available (or when the command is not a `-m` invocation).
+    """
+    for argv in commands:
+        pinned = pin_interpreter(argv)
+        if len(pinned) >= 3 and pinned[0] == sys.executable and pinned[1] == "-m":
+            module = pinned[2]
+            try:
+                found = importlib.util.find_spec(module)
+            except (ImportError, ValueError):
+                # find_spec returns None only for a missing TOP-LEVEL name; for a
+                # dotted runner whose parent package is absent it raises
+                # ModuleNotFoundError, and ImportError/ValueError for a malformed
+                # name. Unguarded, the helper whose whole job is to turn "cannot
+                # import the runner" into a clean skip threw out of execute()
+                # instead -- charging the reviewer with a hard error, and aborting
+                # certify-pack and mutation runs, which do not wrap the call.
+                return module
+            if found is None:
+                return module
+    return None
 
 
 class TestExecutionRequest(BaseModel):
@@ -84,27 +124,85 @@ class TestExecutor:
             mode: Literal["docker", "local"] = "docker"
         elif request.allow_local_execution:
             mode = "local"
+            # A local run is pinned to this interpreter, so a runner it cannot
+            # import is an unavailable backend, not a failing test suite. Without
+            # this the missing module surfaced as an ordinary non-zero exit and
+            # every case scored tests_failed -- an install without the test runner
+            # (the built wheel, the shipped Dockerfile) silently reported 0%
+            # validated for known-good reference patches instead of an invalid run.
+            missing = _missing_runner(commands)
+            if missing is not None:
+                return self._skipped(request.case_id, f"test_runner_unavailable:{missing}")
         else:
             return self._skipped(request.case_id, "local_execution_disabled")
 
-        results: list[TestExecutionResult] = []
-        for argv in commands:
-            if mode == "docker":
-                container = self._container_name(request.case_id)
-                args = self._docker_args(request, argv, container_name=container)
-            else:
-                container = None
-                args = pin_interpreter(argv)
-            result = self._run(request, args, mode, container_name=container)
-            results.append(result)
-            if not result.passed:
-                break
-        combined = self._combined(request.case_id, results, mode)
+        # Evidence lives outside the workspace, so a patch cannot simply overwrite
+        # it, and is removed with the run.
+        evidence_dir = Path(tempfile.mkdtemp(prefix="arena-evidence-"))
+        nonce = uuid4().hex[:12]
+        try:
+            results: list[TestExecutionResult] = []
+            # One budget for the whole case, spent down command by command.
+            remaining = float(request.timeout_seconds)
+            for index, argv in enumerate(commands):
+                command_started = time.perf_counter()
+                report_name = report_filename(request.case_id, nonce, index)
+                host_report = evidence_dir / report_name
+                expects_report = is_pytest_command(pin_interpreter(argv))
+                if mode == "docker":
+                    container = self._container_name(request.case_id)
+                    container_report = CONTAINER_EVIDENCE_DIR / report_name
+                    args = self._docker_args(
+                        request,
+                        argv,
+                        container_name=container,
+                        evidence_dir=evidence_dir,
+                        report_path=str(container_report) if expects_report else None,
+                    )
+                else:
+                    container = None
+                    args = pin_interpreter(argv)
+                    if expects_report:
+                        args = with_report_flag(args, str(host_report))
+                result = self._run(
+                    request,
+                    args,
+                    mode,
+                    container_name=container,
+                    timeout_seconds=max(1, int(remaining)),
+                )
+                remaining -= time.perf_counter() - command_started
+                if expects_report:
+                    result = self._require_evidence(result, host_report)
+                results.append(result)
+                if not result.passed:
+                    break
+            combined = self._combined(request.case_id, results, mode)
+        finally:
+            shutil.rmtree(evidence_dir, ignore_errors=True)
         if mode == "docker":
             return combined.model_copy(
                 update={"image_digest": self._image_digest(request.docker_image)}
             )
         return combined
+
+    @staticmethod
+    def _require_evidence(result: TestExecutionResult, report_path: Path) -> TestExecutionResult:
+        """Downgrade a "pass" that produced no machine-readable proof.
+
+        Exit code 0 alone is not evidence: the suite runs candidate-controlled
+        code, which can terminate the interpreter with status 0 before any test
+        executes. A pass therefore additionally requires a JUnit report showing
+        at least one test and no failures or errors.
+        """
+        if not result.passed or result.timed_out:
+            return result
+        report = read_report(report_path)
+        if report is None:
+            return result.model_copy(update={"passed": False, "error": "no_test_evidence"})
+        if not report.ran_and_passed:
+            return result.model_copy(update={"passed": False, "error": "test_evidence_not_passing"})
+        return result
 
     @staticmethod
     def _combined(
@@ -127,29 +225,67 @@ class TestExecutor:
         )
 
     @staticmethod
+    def _probe_docker(args: list[str]) -> subprocess.CompletedProcess[str] | None:
+        """Run a short docker CLI query, or return None if it did not answer.
+
+        Every probe is bounded: an unresponsive daemon (Docker Desktop
+        mid-restart, a stalled DOCKER_HOST=ssh://... or tcp:// connection) would
+        otherwise block the call forever. subprocess.run cannot be preempted by
+        the per-case timeout or the run's --max-wall-seconds deadline, so an
+        unbounded probe hangs the entire run instead of failing closed.
+        """
+        try:
+            return subprocess.run(
+                args,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=DOCKER_PROBE_TIMEOUT_SECONDS,
+            )
+        except (subprocess.TimeoutExpired, OSError):
+            return None
+
+    @staticmethod
     def _docker_available() -> bool:
         if shutil.which("docker") is None:
             return False
-        result = subprocess.run(
-            ["docker", "version", "--format", "{{.Server.Version}}"],
-            capture_output=True,
-            text=True,
-            check=False,
+        result = TestExecutor._probe_docker(
+            ["docker", "version", "--format", "{{.Server.Version}}"]
         )
-        return result.returncode == 0
+        # A probe that never answered is treated as "docker unavailable", so the
+        # case reports docker_required_but_unavailable and the run fails closed.
+        return result is not None and result.returncode == 0
+
+    @staticmethod
+    def _normalize_image_ref(image: str) -> str | None:
+        """The exact reference `docker run` will resolve, or None if unusable.
+
+        `docker image ls -q` filters by repository, so a bare `arena-bench`
+        matched an existing `arena-bench:1` and passed the presence check -- then
+        `docker run --pull never arena-bench` resolved `arena-bench:latest`, which
+        does not exist, and the resulting exit 125 was scored as an ordinary
+        failing suite rather than a missing image. Making the tag explicit means
+        the probe asks about the same thing that will actually run. Glob
+        metacharacters are rejected outright: they are filter syntax, never a
+        real reference.
+        """
+        if not image or any(character in image for character in "*?["):
+            return None
+        last = image.rsplit("/", 1)[-1]
+        if ":" in last or "@" in last:
+            return image
+        return f"{image}:latest"
 
     @staticmethod
     def _image_present(image: str) -> bool:
         # `docker image ls -q <ref>` lists the id when the image is present and
         # nothing when it is not. Unlike `docker image inspect`, it is reliable
         # under both the classic and the containerd image stores.
-        result = subprocess.run(
-            ["docker", "image", "ls", "-q", image],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        return result.returncode == 0 and bool(result.stdout.strip())
+        reference = TestExecutor._normalize_image_ref(image)
+        if reference is None:
+            return False
+        result = TestExecutor._probe_docker(["docker", "image", "ls", "-q", reference])
+        return result is not None and result.returncode == 0 and bool(result.stdout.strip())
 
     @staticmethod
     def _container_name(case_id: str) -> str:
@@ -158,7 +294,12 @@ class TestExecutor:
 
     @staticmethod
     def _docker_args(
-        request: TestExecutionRequest, args: list[str], *, container_name: str
+        request: TestExecutionRequest,
+        args: list[str],
+        *,
+        container_name: str,
+        evidence_dir: Path | None = None,
+        report_path: str | None = None,
     ) -> list[str]:
         assert request.docker_image is not None
         memory = os.getenv("ARENA_DOCKER_MEMORY", "2g")
@@ -209,23 +350,30 @@ class TestExecutor:
             source = (workspace_root / relative).resolve()
             if source.exists():
                 command += ["-v", f"{source}:{target}:ro"]
+        # The evidence directory is the only writable mount besides the workspace.
+        # It sits outside /workspace so the report cannot be clobbered by the
+        # patched tree, and it is a fresh host temp dir per execution.
+        if evidence_dir is not None:
+            command += ["-v", f"{evidence_dir.resolve()}:{CONTAINER_EVIDENCE_DIR}"]
         if sys.platform != "win32":
             # Run as the host user so the bind-mounted workspace stays writable
             # while the container process is non-root.
             command += ["--user", f"{os.getuid()}:{os.getgid()}"]
-        command += [request.docker_image, *pin_container_interpreter(args)]
+        container_argv = pin_container_interpreter(args)
+        if report_path is not None:
+            container_argv = with_report_flag(container_argv, report_path)
+        command += [request.docker_image, *container_argv]
         return command
 
     @staticmethod
     def _image_digest(image: str | None) -> str | None:
         if not image:
             return None
-        result = subprocess.run(
-            ["docker", "image", "inspect", image, "--format", "{{index .RepoDigests 0}}"],
-            capture_output=True,
-            text=True,
-            check=False,
+        result = TestExecutor._probe_docker(
+            ["docker", "image", "inspect", image, "--format", "{{index .RepoDigests 0}}"]
         )
+        if result is None:
+            return None
         digest = result.stdout.strip()
         return digest or None
 
@@ -248,7 +396,16 @@ class TestExecutor:
         mode: Literal["docker", "local"],
         *,
         container_name: str | None = None,
+        timeout_seconds: int | None = None,
     ) -> TestExecutionResult:
+        """Run one command, bounded by what is left of the case's budget.
+
+        ``timeout_seconds`` is the remaining budget, not the case total. A pack
+        may declare several commands, and giving each the full ``timeout_seconds``
+        let a case run for N times its declared limit -- which also defeats the
+        run-level ``--max-wall-seconds`` deadline that clamps that limit.
+        """
+        budget = request.timeout_seconds if timeout_seconds is None else timeout_seconds
         started = time.perf_counter()
         # run_supervised starts the child in its own session and kills the whole
         # process tree on timeout, so descendants cannot outlive the case.
@@ -261,22 +418,35 @@ class TestExecutor:
                     args,
                     cwd=request.workspace_path,
                     env=env,
-                    timeout=request.timeout_seconds,
-                    preexec_fn=resource_limiter(request.timeout_seconds),
+                    timeout=budget,
+                    preexec_fn=resource_limiter(budget),
                     output_limit=OUTPUT_LIMIT_BYTES,
                 )
         else:
             # The docker CLI needs the caller's docker config; isolation comes
             # from the container itself.
-            result = run_supervised(
-                args,
-                cwd=request.workspace_path,
-                env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
-                timeout=request.timeout_seconds,
-                preexec_fn=None,
-                output_limit=OUTPUT_LIMIT_BYTES,
-            )
-            if result.timed_out and container_name:
+            try:
+                result = run_supervised(
+                    args,
+                    cwd=request.workspace_path,
+                    env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+                    timeout=budget,
+                    preexec_fn=None,
+                    output_limit=OUTPUT_LIMIT_BYTES,
+                )
+            except BaseException:
+                # Ctrl-C or any error while the container is running: killing the
+                # docker CLI does not stop the container it started, so without
+                # this the container keeps its CPU and memory allotment after the
+                # harness has exited.
+                if container_name:
+                    self._force_remove_container(container_name)
+                raise
+            # Remove the container whenever the group was killed, not only on
+            # timeout: the output cap kills the docker CLI the same way, and a
+            # container that ignores the proxied SIGTERM would otherwise keep
+            # running with its CPU and memory allotment after the case moves on.
+            if (result.timed_out or result.output_limit_exceeded) and container_name:
                 self._force_remove_container(container_name)
         duration_ms = int((time.perf_counter() - started) * 1000)
         if result.timed_out:
@@ -300,6 +470,11 @@ class TestExecutor:
             stderr=result.stderr,
             duration_ms=duration_ms,
             execution_mode=mode,
+            # The harness killed the process for flooding past the output cap, so
+            # its non-zero exit is Arena's doing, not a verdict from the suite.
+            # Recording it keeps a truncated run distinguishable from a genuine
+            # test failure instead of silently scoring it as tests_failed.
+            error="test_output_too_large" if result.output_limit_exceeded else None,
         )
 
     @staticmethod
