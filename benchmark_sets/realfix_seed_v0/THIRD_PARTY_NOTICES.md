@@ -32,6 +32,32 @@ are recorded in `benchmark_sources/realfix_seed_v0/<case-id>/evidence.yaml`.
 - Included content: the `src/click` source tree (buggy and fixed) and the `tests`
   tree at the fixed commit. Changed source path: `src/click/core.py`.
 
+## packaging_marker_extra_normalization_001
+
+- Project: packaging
+- Source repository: https://github.com/pypa/packaging
+- License: Apache-2.0 OR BSD-2-Clause (`licenses/packaging-Apache-2.0.txt`,
+  `licenses/packaging-BSD-2-Clause.txt`; the upstream dual-license notice is
+  reproduced in `licenses/packaging-LICENSE.txt`)
+- Buggy commit: `8a805e3baac2d71958ec0d0beffbe4d51fd5795f`
+- Fixed commit: `1c09ddf30b79428c21aec180f52e10f6dedc1d8a`
+- Included content: the `src/packaging` source tree (buggy and fixed) and the
+  `tests` tree at the fixed commit. Changed source path:
+  `src/packaging/markers.py`.
+
+## packaging_name_validation_newline_001
+
+- Project: packaging
+- Source repository: https://github.com/pypa/packaging
+- License: Apache-2.0 OR BSD-2-Clause (`licenses/packaging-Apache-2.0.txt`,
+  `licenses/packaging-BSD-2-Clause.txt`; the upstream dual-license notice is
+  reproduced in `licenses/packaging-LICENSE.txt`)
+- Buggy commit: `033854a05229074ddb191d67da1f8e0165e665da`
+- Fixed commit: `258202ed7f796bdb8a65252a66c3fbd3e69e97f6`
+- Included content: the `src/packaging` source tree (buggy and fixed) and the
+  `tests` tree at the fixed commit. Changed source path:
+  `src/packaging/utils.py`.
+
 ## rich_table_padding_width_001
 
 - Project: Rich
