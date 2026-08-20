@@ -1,6 +1,6 @@
 # RealFix Seed v0
 
-**Status: a three-case methodology seed.** This is **not** RealFix Pilot v1, it is
+**Status: a five-case methodology seed.** This is **not** RealFix Pilot v1, it is
 **not** paper scale, and it supports **no** conclusions about model performance.
 The eventual RealFix Pilot v1 target remains a diverse set of **at least 12**
 cases; this seed exists to prove the end-to-end methodology and serve as a small
@@ -30,8 +30,9 @@ and a real regression test.
 unavailable because the current operators produced zero viable mutants** for its
 small change. It is not claimed to have demonstrated mutation adequacy; its
 assurance rests on the deterministic baseline-fails / reference-passes verdict
-across three runs, not on killing mutants. The other two cases additionally show
-mutation kill rates above the 0.5 certification threshold.
+across three runs, not on killing mutants. The other four cases additionally show
+mutation kill rates above the 0.5 certification threshold -- the two `packaging` cases at
+100%, the highest in the pack.
 
 Per-case evidence (repository URL, license URL, buggy/fixed commit ids, issue/PR,
 selectors, changed paths, the defect, the exercising regression test, and why the
@@ -76,7 +77,7 @@ around by modifying the importer.
 - Licenses: MIT (2), BSD-3-Clause (1).
 - Categories: correctness (3). *(Single category — below the diversity target.)*
 - Commit dates: 2025-09-22, 2026-01-23, 2026-03-14 — **3/3 on or after 2025-09-01**; none before 2025-01-01.
-- Diff size: all three are **small** (< 30 changed source lines: 8, 16, 16). No medium or substantial fixes in this seed.
+- Diff size: all five are **small** (< 30 changed source lines: 2, 8, 16, 16, 28). No medium or substantial fixes in this seed.
 
 ## Docker environment
 
@@ -88,14 +89,14 @@ around by modifying the importer.
 ## Certification (Docker)
 
 `arena certify-pack benchmark_sets/realfix_seed_v0 --limit 20 --determinism-runs 3`
-→ pack level **verified**; all 3 cases `verified`.
+→ pack level **verified**; all 5 cases `verified`.
 
 - Mutation: click 55% (20 mutants), rich 80% (20 mutants); attrs has 0 viable
   mutants, so it carries no mutation evidence and rests on baseline-fails +
   reference-passes + determinism (how the existing ladder treats zero-viable-mutant
   cases).
 - Determinism: baseline-fails / reference-passes held across 3 runs each.
-- Deterministic rebuild: re-importing all three cases reproduces byte-identical
+- Deterministic rebuild: re-importing all five cases reproduces byte-identical
   case directories; the pack checksum is idempotent.
 
 ## Control runs (Docker, full mode)
@@ -119,7 +120,7 @@ and was not worked around by changing production code.
 
 ## Pack integrity
 
-- `pack.sha256`: `b6a87e17ed2ce38026258aa86cd41bb06d498e4820d9ec663f5b3929083a1cfa`
+- `pack.sha256`: `a6c44967fcdff0f97797c62336bb8cb05720eb8265f0d636393893324b5219f2`
 - Case ids are disjoint from `v1`, `audit_v1`, `audit_v2`; the shipped packs are
   byte-for-byte unchanged.
 
