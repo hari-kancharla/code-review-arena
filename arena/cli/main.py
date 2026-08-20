@@ -9,6 +9,7 @@ from arena.cli.commands.audit_report import audit_report as audit_report_command
 from arena.cli.commands.import_fix import import_fix_command
 from arena.cli.commands.leaderboard import leaderboard as leaderboard_command
 from arena.cli.commands.list_cases import list_cases as list_cases_command
+from arena.cli.commands.mine_fixes import mine_fixes_command
 from arena.cli.commands.report import report as report_command
 from arena.cli.commands.run import run as run_command
 from arena.cli.commands.validate import validate as validate_command
@@ -27,6 +28,50 @@ def list_cases(benchmark_set: Path = typer.Argument(DEFAULT_BENCHMARK_SET)) -> N
 @app.command()
 def validate(benchmark_set: Path = typer.Argument(DEFAULT_BENCHMARK_SET)) -> None:
     validate_command(resolve_benchmark_path(benchmark_set))
+
+
+@app.command("mine-fixes")
+def mine_fixes(
+    repo: Path = typer.Option(..., "--repo", help="Local Git repository (worktree or bare)."),
+    revision: str = typer.Option("HEAD", "--revision", help="History to walk, newest first."),
+    limit: int = typer.Option(200, "--limit", min=1, max=100000, help="Commits to examine."),
+    max_files: int = typer.Option(
+        12, "--max-files", min=1, max=1000, help="Skip commits touching more files than this."
+    ),
+    output: Path | None = typer.Option(
+        None, "--output", help="Write scaffolded import specs (JSON) here."
+    ),
+    source_label: str | None = typer.Option(
+        None, "--source-label", help="Stable source label (e.g. owner/repo); never a local path."
+    ),
+    allow_unclassified: bool = typer.Option(
+        False,
+        "--allow-unclassified",
+        help="Include commits that also changed docs/config. import-fix rejects these "
+        "unless every path is covered by a selector, so they need manual work.",
+    ),
+    json_output: bool = typer.Option(False, "--json", help="Emit scaffolded specs to stdout."),
+) -> None:
+    """Propose historical fixes that could become execution-backed review cases.
+
+    A candidate is a non-merge commit that changed BOTH a test file and a source
+    file: the tests it added are what make a fail-to-pass check possible, and its
+    parent is the buggy state. Mining only proposes -- `arena certify-pack` is
+    what decides, by running the tests at both commits. Semantic fields are never
+    guessed; the scaffold marks them TODO for a human.
+
+    Local-only, offline, deterministic, non-AI. Reads committed Git objects only.
+    """
+    mine_fixes_command(
+        repo=repo,
+        revision=revision,
+        limit=limit,
+        max_files=max_files,
+        output=output,
+        source_label=source_label,
+        as_json=json_output,
+        allow_unclassified=allow_unclassified,
+    )
 
 
 @app.command("import-fix")
@@ -116,6 +161,35 @@ def run(
         help="Abort unless the pack's content checksum equals this digest. Pin it from "
         "an out-of-band source (a signed release) since pack.sha256 lives inside the pack.",
     ),
+    model_knowledge_cutoff: str | None = typer.Option(
+        None,
+        "--model-knowledge-cutoff",
+        help="YYYY-MM-DD. An OPERATOR CLAIM the harness cannot verify; it is recorded and "
+        "published as a claim. Requires --model-cutoff-basis and --model-cutoff-source.",
+    ),
+    model_cutoff_basis: str | None = typer.Option(
+        None,
+        "--model-cutoff-basis",
+        help="vendor_documented | operator_estimate.",
+    ),
+    model_cutoff_source: str | None = typer.Option(
+        None,
+        "--model-cutoff-source",
+        help="Citation for the cutoff claim (a URL or a reference).",
+    ),
+    cutoff_grace_days: int = typer.Option(
+        limits.DEFAULT_CUTOFF_GRACE_DAYS,
+        "--cutoff-grace-days",
+        min=limits.DEFAULT_CUTOFF_GRACE_DAYS,
+        help="Symmetric guard band around the cutoff, in days. Can only be WIDENED: "
+        "narrowing it would let an operator manufacture a cohort out of borderline cases.",
+    ),
+    reviewer_retrieval: str = typer.Option(
+        "unknown",
+        "--reviewer-retrieval",
+        help="none | enabled | unknown. A reviewer with live retrieval defeats any cutoff "
+        "argument, so anything but 'none' suppresses the published exposure difference.",
+    ),
 ) -> None:
     run_command(
         resolve_benchmark_path(benchmark_set),
@@ -133,6 +207,11 @@ def run(
         max_cost=max_cost,
         model=model,
         expected_pack_sha256=expected_pack_sha256,
+        model_knowledge_cutoff=model_knowledge_cutoff,
+        model_cutoff_basis=model_cutoff_basis,
+        model_cutoff_source=model_cutoff_source,
+        cutoff_grace_days=cutoff_grace_days,
+        reviewer_retrieval=reviewer_retrieval,
     )
 
 
@@ -332,7 +411,7 @@ def schema(
     payload = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": (
-            "https://github.com/harihkk/code-review-arena/"
+            "https://github.com/hari-kancharla/code-review-arena/"
             f"schema/review-result-{REVIEW_SCHEMA_VERSION}.json"
         ),
         "version": REVIEW_SCHEMA_VERSION,
