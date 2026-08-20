@@ -1,8 +1,11 @@
 version: v1
 name: CodeReview Arena seeded production bugs
+# Written for this benchmark rather than lifted from public history, so no
+# upstream fix date applies. Not a claim of immunity: once this repository
+# is public the pack is its own answer key, which published_date records.
+default_origin_kind: authored
 cases:
   - fastapi_auth_bypass_001
-  - spring_boot_null_handling_001
   - graphql_n_plus_one_001
   - react_stale_state_001
   - kafka_idempotency_bug_001

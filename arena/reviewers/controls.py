@@ -22,13 +22,6 @@ class ControlReviewer(BaseReviewer):
             (10, 14),
             "Use require_admin and enforce RBAC.",
         ),
-        "spring_boot_null_handling_001": (
-            "Missing records now cause an Optional runtime exception instead of a 404.",
-            "missing record Optional not found findById empty exception",
-            "src/main/java/com/acme/orders/OrderService.java",
-            (6, 8),
-            "Use orElseThrow with NOT_FOUND.",
-        ),
         "graphql_n_plus_one_001": (
             "Customer lookups inside the order map introduce N+1 database queries.",
             "N+1 batching database query customer loop query",
@@ -288,20 +281,6 @@ def delete_user(user_id: int, current_user=Depends(require_admin)):
     if current_user.get("role") != "admin":
         return None
     return {"deleted_user_id": user_id, "deleted_by": current_user["id"]}
-""",
-        "spring_boot_null_handling_001": """package com.acme.orders;
-
-import org.springframework.web.server.ResponseStatusException;
-import static org.springframework.http.HttpStatus.NOT_FOUND;
-
-class OrderService {
-    private OrderRepository repository;
-
-    Order find(long id) {
-        return repository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "Order not found"));
-    }
-}
 """,
         "graphql_n_plus_one_001": """export const resolvers = {
   Query: {
