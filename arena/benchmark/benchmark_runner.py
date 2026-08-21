@@ -100,14 +100,17 @@ def _run_status(
     execution_required: bool,
     executed: int,
     unavailable: int,
+    all_output_invalid: bool = False,
 ) -> RunStatus:
     """Classify a finished run's trust level (see RunStatus).
 
     A tampered pack invalidates the whole run; a run that produced no results at
-    all failed; a run that needed test execution but whose backend was never
-    available (nothing executed, something tried) is invalid because no repair
-    could be judged; a budget-truncated run, or one where some cases ran and some
-    could not, is partial; otherwise it is complete.
+    all failed; a run where the reviewer never once produced parseable output is
+    invalid, because a wrapper that crashes on every case is a broken measurement
+    and not a reviewer that scored zero; a run that needed test execution but whose
+    backend was never available (nothing executed, something tried) is invalid
+    because no repair could be judged; a budget-truncated run, or one where some
+    cases ran and some could not, is partial; otherwise it is complete.
     """
     if checksum_verified is False:
         return "invalid"
@@ -116,6 +119,8 @@ def _run_status(
         return "partial"
     if results == 0:
         return "failed"
+    if all_output_invalid:
+        return "invalid"
     if execution_required and unavailable > 0 and executed == 0:
         return "invalid"
     if skipped or (execution_required and unavailable > 0):
@@ -660,6 +665,11 @@ def _run_on_snapshot(
     non_exact_output_used = any(
         item.response.parse_status in {"tolerant", "repaired"} for item in case_results
     )
+    # A single invalid case is a scoreable reviewer-contract failure. Every case
+    # invalid is something else: the reviewer never returned usable output at all
+    # (a crashing wrapper, a control with no answers for this pack), which would
+    # otherwise be published as a legitimate 0.0 alongside reviewers that ran.
+    all_output_invalid = produced > 0 and parse_status_counts.get("invalid", 0) == produced
     run = RunResult(
         run_id=run_id,
         benchmark_set=manifest.version,
@@ -703,6 +713,7 @@ def _run_on_snapshot(
             execution_required=mode != "review",
             executed=executed_cases,
             unavailable=unavailable_cases,
+            all_output_invalid=all_output_invalid,
         ),
         execution_backend=execution_backend,
         eligible_case_count=eligible,
