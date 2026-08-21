@@ -12,6 +12,7 @@ from typing import Any
 from arena.core.config import REPORT_SCHEMA_VERSION
 from arena.core.models import RunResult
 from arena.reports.json_report import read_json_report
+from arena.reports.leaderboard import run_integrity_admissible
 from arena.reports.report_schema import AuditReport
 
 AUDIT_BENCHMARK_SET = "audit_v1"
@@ -72,6 +73,11 @@ def _pack_case_count(benchmark_set: str) -> int:
         return 0
 
 
+def _admissible(run: RunResult) -> bool:
+    """Whether a run may appear in a published report at all."""
+    return run_integrity_admissible(schema_version=run.schema_version, run_status=run.run_status)
+
+
 def build_audit_report_data(
     runs: list[RunResult],
     *,
@@ -80,6 +86,11 @@ def build_audit_report_data(
 ) -> dict[str, Any]:
     pack_label = pack_label or _pack_label(benchmark_set)
     title = f"Detection Is Not Validation: {pack_label} Results"
+    # Integrity gate, applied here rather than at load time so that no caller can
+    # build a report out of runs the harness already stamped untrustworthy. A run
+    # excluded here is counted, never silently dropped.
+    excluded = [run for run in runs if not _admissible(run)]
+    runs = [run for run in runs if _admissible(run)]
     if not runs:
         return {
             "schema_version": REPORT_SCHEMA_VERSION,
@@ -92,6 +103,7 @@ def build_audit_report_data(
                 "case_count": _pack_case_count(benchmark_set),
                 "reviewers_tested": [],
                 "biggest_detection_validation_gap": None,
+                "excluded_invalid_run_count": len(excluded),
             },
             "reviewers": [],
             "gaps": [],
@@ -166,6 +178,11 @@ def build_audit_report_data(
                 "primary_failure_mode": (
                     run_failure_counter.most_common(1)[0][0] if run_failure_counter else None
                 ),
+                # Integrity provenance travels with the row into the artifact, so a
+                # published number can always be traced back to the trust state of
+                # the run that produced it.
+                "run_status": run.run_status,
+                "pack_checksum_verified": run.metadata.pack_checksum_verified,
             }
         )
 
@@ -192,6 +209,7 @@ def build_audit_report_data(
                 if biggest_gap_label
                 else None
             ),
+            "excluded_invalid_run_count": len(excluded),
         },
         "reviewers": reviewer_rows,
         "gaps": gaps,
@@ -289,14 +307,16 @@ def render_audit_report_markdown(data: dict[str, Any]) -> str:
     lines = [f"# {data['title']}", ""]
     if data.get("empty"):
         pack = data["summary"]["benchmark_pack"]
-        lines.extend(
-            [
-                f"_No {pack} runs were found under the requested runs directory._",
-                "",
-                "## Reproducibility",
-                "",
-            ]
-        )
+        excluded = data["summary"].get("excluded_invalid_run_count", 0)
+        lines.append(f"_No admissible {pack} runs were found under the requested runs directory._")
+        if excluded:
+            lines.append("")
+            lines.append(
+                f"_{excluded} run(s) were found but excluded: the harness did not stamp them "
+                "`run_status=complete` (a tampered pack, a run that produced nothing, or one "
+                "that needed execution it never got). Re-run them before publishing._"
+            )
+        lines.extend(["", "## Reproducibility", ""])
         lines.extend(f"- `{command}`" for command in data["reproducibility_commands"])
         lines.extend(["", "## Limitations", ""])
         lines.extend(f"- {item}" for item in data["limitations"])
@@ -313,6 +333,12 @@ def render_audit_report_markdown(data: dict[str, Any]) -> str:
             f"- Reviewers tested: {', '.join(summary['reviewers_tested']) or 'none'}",
         ]
     )
+    excluded = summary.get("excluded_invalid_run_count", 0)
+    if excluded:
+        lines.append(
+            f"- Runs excluded as untrustworthy: {excluded} "
+            "(`run_status` was not `complete`; not counted in any figure below)"
+        )
     gap = summary.get("biggest_detection_validation_gap")
     if gap:
         lines.append(

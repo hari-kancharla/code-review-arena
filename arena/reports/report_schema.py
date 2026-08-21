@@ -29,6 +29,9 @@ class AuditSummary(_Strict):
     case_count: int
     reviewers_tested: list[str]
     biggest_detection_validation_gap: AuditGapRef | None = None
+    # Runs found but refused by the integrity gate. Defaulted so reports written
+    # before this field existed still validate on read.
+    excluded_invalid_run_count: int = 0
 
 
 class AuditReviewerRow(_Strict):
@@ -55,6 +58,10 @@ class AuditReviewerRow(_Strict):
     latency_per_case_ms: float | None = None
     run_id: str
     primary_failure_mode: str | None = None
+    # Integrity provenance for the run behind this row. Defaulted for reports
+    # written before these fields existed.
+    run_status: str = "complete"
+    pack_checksum_verified: bool | None = None
 
 
 class AuditGap(_Strict):
