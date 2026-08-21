@@ -13,6 +13,63 @@ from arena.patching.patch_models import PatchApplyResult
 from arena.scoring.metrics import f_beta_score, precision, rate, recall, wilson_interval
 from arena.validators.base import ValidatorResult
 
+# Executor errors that mean the harness never obtained a verdict, as opposed to
+# the suite returning one.
+#
+# The dividing line is WHO caused it. Anything the candidate's own patch can
+# provoke stays a failing suite, because a reviewer must not be able to trade a
+# bad score for a harness excuse: a hang (test_execution_timed_out), an output
+# flood (test_output_too_large) and a suppressed report (no_test_evidence) are
+# all reachable from patched code, and certification proves the reference patch
+# triggers none of them. Only conditions the reviewer cannot influence -- an
+# absent backend, an unusable pack command, or the run's own wall-clock deadline
+# cutting the suite short -- are inconclusive.
+_INCONCLUSIVE_EXECUTION_ERRORS = frozenset(
+    {
+        "test_deadline_truncated",
+        "docker_required_but_unavailable",
+        "docker_image_not_present",
+        "local_execution_disabled",
+        "workspace_not_found",
+        "empty_test_command",
+    }
+)
+
+
+def _is_inconclusive(tests: TestExecutionResult | None) -> bool:
+    """Whether the harness, not the suite, is why there is no pass."""
+    if tests is None:
+        return False
+    error = tests.error or ""
+    return error in _INCONCLUSIVE_EXECUTION_ERRORS or error.startswith(
+        ("test_runner_unavailable", "invalid_test_command")
+    )
+
+
+def is_execution_backed(case: BenchmarkCase) -> bool:
+    """Whether this case can produce EXECUTION-BACKED validation evidence.
+
+    Only a runnable test suite counts. A structural validator is a deterministic
+    lexical/AST heuristic, documented as a weaker signal than execution, and a
+    heuristic can be satisfied by a patch that does not repair the defect -- so a
+    case gated only by validators is excluded from validated_case_rate entirely
+    (neither a pass nor a failure). Its validator evidence still surfaces in
+    structural_pass_rate and repair_confidence, so nothing is lost, only
+    un-conflated.
+
+    The test must actually be RUNNABLE, which is what the executor requires: a
+    case declaring `tests_required: true` with `run_tests: false` (or no
+    test_command) never executes anything, yet counting it here put it in the
+    denominator where `tests_passed is not True` marked it a miss for every
+    reviewer forever -- publishing 0% repair even for the exact ground-truth fix.
+
+    This is the single definition of that predicate. It is shared with the
+    placeholder built for a case that crashed inside the harness, which must
+    agree: if the two drift, a crashed validator-only case is charged to the
+    reviewer as a miss inside a denominator that otherwise excludes it.
+    """
+    return bool(case.execution.run_tests and case.execution.test_command)
+
 
 def score_deterministic_case(
     case: BenchmarkCase,
@@ -54,18 +111,27 @@ def score_deterministic_case(
         reasons.append("patch_apply_failed")
     tests_required = case.execution.run_tests or case.validation.tests_required
     if tests_required and tests_passed is not True:
-        reasons.append("tests_failed")
+        # Distinguish "the suite said no" from "we never got an answer". A
+        # missing runner or Docker backend is the environment's doing, not a
+        # verdict on the patch, and recording it as tests_failed reads as a
+        # reviewer miss while hiding that the run was degraded. Anything the
+        # PATCH caused -- a hang, an output flood, a suppressed report -- stays
+        # tests_failed. deterministic_pass is False either way, since nothing was
+        # confirmed; the evidence just says which happened.
+        reasons.append("execution_inconclusive" if _is_inconclusive(tests) else "tests_failed")
     if case.validation.structural_validators and structural_passed is not True:
         reasons.append("structural_validation_failed")
     if false_positives > case.validation.max_false_positives:
         reasons.append("false_positive")
-    # A repair can only be a validated pass if an executable gate (tests or a
-    # structural validator) actually checks it. A patch-required case with no
-    # such gate cannot confirm a repair, so a clean patch apply alone must never
-    # count as validated (a no-op patch would otherwise pass).
-    validation_eligible = tests_required or bool(case.validation.structural_validators)
-    if case.validation.patch_required and not validation_eligible:
+    # A repair needs SOME gate to be judged at all: a patch-required case with
+    # neither tests nor a validator cannot confirm anything, so a clean patch
+    # apply alone must never count as a repair (a no-op patch would pass).
+    has_gate = tests_required or bool(case.validation.structural_validators)
+    if case.validation.patch_required and not has_gate:
         reasons.append("no_execution_evidence")
+    # ...but only test execution is EXECUTION-BACKED evidence, so eligibility for
+    # validated_case_rate is decided by the shared predicate below.
+    validation_eligible = is_execution_backed(case)
 
     return DeterministicCaseScore(
         case_id=case.id,
@@ -119,6 +185,13 @@ def aggregate_deterministic_metrics(
         if case.deterministic_case_score and case.deterministic_case_score.validation_eligible
     ]
     validatable_count = len(validatable)
+    # Cases the rate could not cover, counted so the gap between the pack's size
+    # and the denominator is explicit rather than something a reader must infer.
+    # Derived from eligibility, which is a property of the CASE: keying it off
+    # whether validators actually ran made it a property of the REVIEWER, so the
+    # same pack reported 0 excluded cases for a reviewer whose patch never
+    # applied and 4 for one whose did.
+    non_execution_backed_count = sum(1 for score in scores if not score.validation_eligible)
     validated_tp = sum(
         bool(case.deterministic_case_score and case.deterministic_case_score.deterministic_pass)
         for case in validatable
@@ -155,17 +228,19 @@ def aggregate_deterministic_metrics(
         validated_f_beta=round(f_beta_score(validated_precision, validated_recall, beta), 6),
         beta=beta,
         deterministic_pass_rate=(
-            round(validated_tp / validatable_count, 6) if validatable_count else 0.0
+            round(validated_tp / validatable_count, 6) if validatable_count else None
         ),
         # Unit-coherent case-level repair rate (see DeterministicMetrics). Equal
         # to deterministic_pass_rate; named for the leaderboard/product surface.
         validated_case_rate=(
-            round(validated_tp / validatable_count, 6) if validatable_count else 0.0
+            round(validated_tp / validatable_count, 6) if validatable_count else None
         ),
         validated_case_rate_ci_low=validated_ci[0] if validated_ci else None,
         validated_case_rate_ci_high=validated_ci[1] if validated_ci else None,
+        validated_eligible_case_count=validatable_count,
+        non_execution_backed_case_count=non_execution_backed_count,
         complete_repair_rate=(
-            round(complete_repairs / validatable_count, 6) if validatable_count else 0.0
+            round(complete_repairs / validatable_count, 6) if validatable_count else None
         ),
         bug_completeness_rate=round(bug_complete / case_count, 6) if case_count else 0.0,
         supported_claim_rate=(
