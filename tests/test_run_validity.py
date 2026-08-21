@@ -72,6 +72,21 @@ def test_run_status_classifies_each_trust_level():
     assert _status(skipped=True, checksum_verified=False) == "invalid"
 
 
+def test_run_status_invalid_when_reviewer_never_produced_usable_output():
+    """Every case unparseable is a broken reviewer, not a score of zero.
+
+    A wrapper that crashes on every case previously completed as a normal run
+    reporting 0.0, indistinguishable on the leaderboard from a reviewer that ran
+    and found nothing.
+    """
+    assert _status(all_output_invalid=True) == "invalid"
+    # A partial failure is still a scoreable reviewer-contract failure.
+    assert _status(all_output_invalid=False) == "complete"
+    # A tampered pack still takes precedence, and no results is still "failed".
+    assert _status(all_output_invalid=True, checksum_verified=False) == "invalid"
+    assert _status(results=0, all_output_invalid=False) == "failed"
+
+
 def test_run_status_invalid_when_execution_required_but_backend_unavailable():
     # Execution was required, nothing ran, and cases tried: scores are not real.
     assert _status(execution_required=True, executed=0, unavailable=5, results=5) == "invalid"
@@ -81,6 +96,27 @@ def test_run_status_invalid_when_execution_required_but_backend_unavailable():
     assert _status(execution_required=True, executed=3, unavailable=2) == "partial"
     # Execution required but every case ran: complete.
     assert _status(execution_required=True, executed=10, unavailable=0) == "complete"
+
+
+def test_crashing_reviewer_is_marked_invalid_not_scored_zero(tmp_path):
+    """End-to-end: a reviewer that raises on every case must not read as a real 0.0."""
+    from arena.core.models import CaseContext, ReviewerResponse
+    from arena.reviewers.base import BaseReviewer
+
+    class CrashingReviewer(BaseReviewer):
+        name = "crashing"
+        model = None
+
+        def review(self, context: CaseContext) -> ReviewerResponse:
+            raise RuntimeError("wrapper died")
+
+    run = run_benchmark(V1, CrashingReviewer(), mode="review")
+
+    # Every case failed to parse, so the run itself is not a measurement.
+    assert run.metadata.reviewer_parse_status_counts == {"invalid": run.eligible_case_count}
+    assert run.run_status == "invalid"
+    # And it can never reach the leaderboard, even with unverified runs included.
+    assert leaderboard_eligible(run, include_unverified=True) is False
 
 
 def test_execution_backend_reflects_actual_execution(tmp_path):
