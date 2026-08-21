@@ -51,14 +51,20 @@ def run_validators(names: list[str], context: ValidatorContext) -> list[Validato
     for name in names:
         try:
             results.append(get_validator(name).validate(context))
-        except (KeyError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - a validator must never abort a run.
+            # Fail closed on ANYTHING a validator raises. The previous tuple
+            # missed the errors actually thrown on this path: read_expected_file
+            # raises arena's ValidationError (not an OSError/ValueError) for a
+            # missing or oversized workspace file, and IndexError when a case
+            # declares no ground-truth files -- so a validator that could not read
+            # its file crashed the whole case instead of recording a failed check.
             results.append(
                 ValidatorResult(
                     name=name,
                     passed=False,
                     confidence=1.0,
                     message="Validator could not evaluate the patched workspace.",
-                    error=str(exc),
+                    error=f"{type(exc).__name__}: {exc}",
                 )
             )
     return results

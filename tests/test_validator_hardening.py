@@ -292,3 +292,142 @@ def test_shipped_packs_have_no_answer_surface_leak(pack):
     warnings = scan_benchmark(Path("benchmark_sets") / pack)
     leaks = [w for w in warnings if w.surface in answer_surfaces]
     assert leaks == [], [w.render() for w in leaks]
+
+
+def test_dead_code_mentioning_a_keyword_does_not_satisfy_a_validator(tmp_path):
+    """A structural validator must establish the property, not spot a token.
+
+    These three validators matched a substring anywhere in the bug file, so a
+    patch that inserted one dead line -- changing no behaviour and leaving the
+    seeded defect completely intact -- passed the only gate these cases have
+    (they ship no tests) and earned a validated repair.
+    """
+    from arena.validators.javascript_static import (
+        GraphQLUsesBatchingOrDataLoader,
+        ReactUsesFunctionalStateUpdate,
+    )
+    from arena.validators.sql_static import SQLHasTenantOrOwnerFilter
+
+    # N+1 intact, plus a dead line containing "batch".
+    n_plus_one = (
+        "const batchSizeUnused = 0;\n"
+        "export const resolvers = { Query: { orders: async (_p, _a, { db }) => {\n"
+        "  const orders = await db.orders.list();\n"
+        "  return Promise.all(orders.map(async order => ({ ...order,\n"
+        "    customer: await db.customers.findById(order.customerId) })));\n"
+        "} } };\n"
+    )
+    context = _context(tmp_path / "graphql", "src/resolvers/orders.ts", n_plus_one)
+    assert GraphQLUsesBatchingOrDataLoader().validate(context).passed is False
+
+    # Stale closure intact, plus a dead arrow function spreading a lookalike name.
+    stale = (
+        "const unusedCopy = () => [...previousDraft];\n"
+        "export function Notifications() {\n"
+        "  const [messages, setMessages] = useState([]);\n"
+        "  async function receive(message) { setMessages([...messages, message]); }\n"
+        "}\n"
+    )
+    context = _context(tmp_path / "react", "src/components/Notifications.tsx", stale)
+    assert ReactUsesFunctionalStateUpdate().validate(context).passed is False
+
+    # Unscoped WHERE intact; the tenant column only appears in the SELECT list.
+    leaky = "SELECT id, title, body, organization_id\nFROM documents\nWHERE id = :document_id;\n"
+    context = _context(tmp_path / "sql", "sql/documents.sql", leaky)
+    assert SQLHasTenantOrOwnerFilter().validate(context).passed is False
+
+    # ...and a genuinely scoped predicate still passes.
+    scoped = (
+        "SELECT id, title FROM documents\n"
+        "WHERE id = :document_id AND organization_id = :organization_id;\n"
+    )
+    context = _context(tmp_path / "sql-ok", "sql/documents.sql", scoped)
+    assert SQLHasTenantOrOwnerFilter().validate(context).passed is True
+
+
+def test_a_patch_required_case_with_no_gate_fails_validation():
+    """An unscoreable case must be caught when the pack is authored.
+
+    A case demanding a patch with neither tests nor a structural validator can
+    never confirm a repair: it penalises every reviewer identically and adds only
+    noise. v1 shipped exactly one such case before this check existed.
+    """
+    from arena.benchmark.dataset_validator import validate_case
+
+    case = BenchmarkCase.model_validate(
+        {
+            "id": "ungated",
+            "title": "t",
+            "category": "correctness",
+            "severity": "low",
+            "stack": ["python"],
+            "description": "d",
+            "input": {},
+            "execution": {"run_tests": False},
+            "ground_truth": {
+                "bugs": [
+                    {
+                        "summary": "s",
+                        "files": [{"path": "a.py", "line_ranges": [{"start": 1, "end": 1}]}],
+                        "concepts": ["x"],
+                    }
+                ]
+            },
+            "validation": {
+                "patch_required": True,
+                "tests_required": False,
+                "structural_validators": [],
+            },
+        }
+    )
+    case = case.model_copy(update={"case_dir": Path("benchmark_sets/v1/fastapi_auth_bypass_001")})
+
+    errors = validate_case(case)
+
+    assert any("no validation gate" in error for error in errors)
+
+
+def test_validator_failure_never_aborts_the_case(tmp_path):
+    """A validator that cannot read its file must fail closed, not crash.
+
+    The handler caught (KeyError, OSError, ValueError), but read_expected_file
+    raises arena's own ValidationError for a missing or oversized workspace file
+    and IndexError when a case declares no ground-truth files -- neither of which
+    is in that tuple, so the exception escaped and took the whole case with it.
+    """
+    from arena.validators.registry import run_validators
+
+    case = BenchmarkCase.model_validate(
+        {
+            "id": "novalidatorfile",
+            "title": "t",
+            "category": "correctness",
+            "severity": "low",
+            "stack": ["python"],
+            "description": "d",
+            "input": {},
+            "ground_truth": {
+                "bugs": [
+                    {
+                        "summary": "s",
+                        "files": [{"path": "absent.py", "line_ranges": [{"start": 1, "end": 1}]}],
+                        "concepts": ["x"],
+                    }
+                ]
+            },
+            "validation": {"structural_validators": ["sql_has_tenant_or_owner_filter"]},
+        }
+    )
+    context = ValidatorContext(
+        case_id=case.id,
+        workspace_path=tmp_path,  # the declared file does not exist here
+        changed_files=[],
+        finding=None,
+        case_metadata=case,
+    )
+
+    results = run_validators(["sql_has_tenant_or_owner_filter"], context)
+
+    assert len(results) == 1
+    assert results[0].passed is False
+    assert results[0].error is not None
