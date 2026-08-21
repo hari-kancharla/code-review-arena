@@ -413,8 +413,13 @@ def audit_report(
         "--output",
     ),
     json_output: Path | None = typer.Option(
-        Path("dashboard/public/reports/audit-v1.json"),
+        None,
         "--json-output",
+        help=(
+            "Also write the dashboard JSON to this path. No longer defaults to "
+            "dashboard/public/reports/audit-v1.json: publishing to a tracked, committed "
+            "file must be an explicit choice, not a side effect of running the report."
+        ),
     ),
     benchmark_set: str = typer.Option(
         "audit_v1", "--benchmark-set", help="Which pack's runs to aggregate."
