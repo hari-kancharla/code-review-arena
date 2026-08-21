@@ -4,6 +4,14 @@ Structural validators provide deterministic evidence that a patch contains the s
 property implied by a seeded defect. They complement regression tests rather than replacing
 them.
 
+They are a **weaker signal than execution and are scored as such**: a validator is a
+comment-stripped lexical/AST check, not semantic understanding, so it can be satisfied by a
+patch that does not actually repair the defect. A case whose only gate is a structural
+validator is therefore excluded from `validated_case_rate` (see
+[metrics.md](metrics.md#validation-tier)); its result surfaces in `structural_pass_rate`
+instead. Prefer giving a case executable tests — that is what makes a repair claim
+execution-backed.
+
 ## Registry
 
 Validators implement `BaseValidator.validate(ValidatorContext) -> ValidatorResult` and
@@ -49,3 +57,6 @@ patch's exact spelling.
 - `pagination_uses_stable_tiebreaker`
 - `react_uses_functional_state_update`
 - `graphql_uses_batching_or_dataloader`
+- `async_update_atomicity_guard`
+- `fastapi_tenant_admin_authorization`
+- `tenant_scoped_idempotency_key`
