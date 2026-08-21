@@ -70,3 +70,35 @@ def test_output_limit_is_measured_in_bytes(tmp_path):
     script = "import sys\nsys.stdout.write('\\u20ac' * 200)\nsys.stdout.flush()\n"
     result = _run(script, output_limit=400, tmp_path=tmp_path)
     assert result.output_limit_exceeded is True
+
+
+def test_executor_reports_output_cap_distinctly_from_a_test_failure(tmp_path):
+    """A run killed for flooding must not look like the suite deciding to fail.
+
+    The executor builds its result from the exit code alone, so a process the
+    harness itself SIGTERMed for exceeding the output cap arrived as
+    passed=False with no error, indistinguishable from a genuine tests_failed
+    verdict -- which silently marks a correct repair unvalidated.
+    """
+    from arena.execution.test_executor import TestExecutionRequest, TestExecutor
+
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    # Would exit 0, but floods well past OUTPUT_LIMIT_BYTES first.
+    flooder = workspace / "flood.py"
+    flooder.write_text("import sys\nsys.stdout.write('x' * 600000)\nsys.exit(0)\n")
+
+    result = TestExecutor().execute(
+        TestExecutionRequest(
+            case_id="flood-001",
+            workspace_path=workspace,
+            test_command=[[sys.executable, "flood.py"]],
+            timeout_seconds=30,
+            allow_local_execution=True,
+        )
+    )
+
+    assert result.ran is True
+    assert result.passed is False  # still conservative: never a silent pass
+    assert result.timed_out is False
+    assert result.error == "test_output_too_large"

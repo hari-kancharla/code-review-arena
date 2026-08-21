@@ -78,3 +78,42 @@ def test_executor_reports_timeout(tmp_path):
     assert result.timed_out is True
     assert result.passed is False
     assert result.error == "test_execution_timed_out"
+
+
+@posix_only
+def test_descendants_do_not_survive_a_clean_exit(tmp_path: Path):
+    """A helper left behind by a command that exited 0 must still be killed.
+
+    The group was only signalled on timeout, overflow, or a child that would not
+    reap. A fixture that backgrounds a helper with detached stdio hits none of
+    those: both pipes reach EOF at once and wait() returns immediately, so the
+    helper survived the run, held its port and CPU into later cases, and made the
+    next case's tests fail to bind -- recording a correct repair as tests_failed.
+    """
+    marker = tmp_path / "alive.txt"
+    child = tmp_path / "child.py"
+    grandchild = (
+        "import time\n"
+        "while True:\n"
+        f"    open({str(marker)!r}, 'a').write('x')\n"
+        "    time.sleep(0.05)\n"
+    )
+    child.write_text(
+        "import subprocess, sys, time\n"
+        f"subprocess.Popen([sys.executable, '-c', {grandchild!r}],\n"
+        "  stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, stdin=subprocess.DEVNULL)\n"
+        "time.sleep(0.4)\n"
+        "sys.exit(0)\n",
+        encoding="utf-8",
+    )
+
+    result = run_supervised([sys.executable, str(child)], cwd=tmp_path, env=_path_env(), timeout=15)
+    assert result.returncode == 0
+    assert result.timed_out is False
+
+    # The grandchild really did run, so this is a meaningful check...
+    before = marker.stat().st_size if marker.exists() else 0
+    assert before > 0
+    # ...and it stops as soon as the supervisor returns.
+    time.sleep(1.0)
+    assert (marker.stat().st_size if marker.exists() else 0) == before
