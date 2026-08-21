@@ -32,6 +32,20 @@ def load_runs(runs_dir: Path) -> list[RunResult]:
     return [read_json_report(path) for path in paths]
 
 
+def run_integrity_admissible(*, schema_version: int, run_status: str) -> bool:
+    """The trust floor shared by every consumer that publishes run results.
+
+    A run below this floor is not a measurement at all: either it predates the v2
+    schema, or the harness itself stamped it non-complete (a tampered pack, a run
+    that produced nothing, or one that needed execution it never got). Unlike the
+    comparability rules in ``eligibility_from_fields``, this floor is absolute --
+    ``--include-unverified`` relaxes comparability, never integrity. Report
+    builders share it so a run the leaderboard refuses to rank can never be
+    promoted into a published artifact instead.
+    """
+    return schema_version >= 2 and run_status == "complete"
+
+
 def eligibility_from_fields(
     *,
     schema_version: int,
@@ -55,7 +69,7 @@ def eligibility_from_fields(
     True (salvage used) and None (old run, exactness unknown) are not default
     comparable. Anything short is inspectable only with include_unverified.
     """
-    if schema_version < 2 or run_status != "complete":
+    if not run_integrity_admissible(schema_version=schema_version, run_status=run_status):
         return False
     if include_unverified:
         return True
