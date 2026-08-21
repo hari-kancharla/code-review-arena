@@ -21,12 +21,18 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/harihkk/code-review-arena"
-Repository = "https://github.com/harihkk/code-review-arena"
-Documentation = "https://github.com/harihkk/code-review-arena#readme"
-Issues = "https://github.com/harihkk/code-review-arena/issues"
+Homepage = "https://github.com/hari-kancharla/code-review-arena"
+Repository = "https://github.com/hari-kancharla/code-review-arena"
+Documentation = "https://github.com/hari-kancharla/code-review-arena#readme"
+Issues = "https://github.com/hari-kancharla/code-review-arena/issues"
 
 [project.optional-dependencies]
+# The test runner the shipped packs invoke locally. Not a hard runtime dependency:
+# review-mode runs execute nothing, and Docker-backed runs use the image's own
+# interpreter. It IS required to execute a Python pack on the host, so any image
+# or install that runs packs locally must include it -- without it the harness
+# reports the missing runner as an invalid run rather than scoring the reviewer.
+run = ["pytest>=8.0"]
 dev = [
   "hypothesis>=6.0",
   "mypy>=1.10",
