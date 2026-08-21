@@ -23,6 +23,14 @@ export type LeaderboardRow = {
   detail_available?: boolean;
   deterministic_passes: number;
   deterministic_metrics: DeterministicMetrics | null;
+  // Whether this run meets the default comparability policy (Docker-backed, full
+  // coverage, externally verified pack, exact reviewer output). Absent on rows
+  // from an API predating the field; only `false` asserts "not comparable".
+  verified?: boolean;
+  // Where the row came from. "shipped-snapshot" rows are the committed audit
+  // results that ship with the repo, NOT the viewer's own runs, and must always be
+  // labelled as such rather than presented as live results.
+  source?: "live" | "shipped-snapshot";
 };
 
 export type DeterministicMetrics = {
