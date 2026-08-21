@@ -1,10 +1,12 @@
 """Run a subprocess as its own process group and kill the whole tree on exit.
 
 ``subprocess.run(timeout=...)`` only signals the direct child, so descendants a
-fixture spawns (background shells, dev servers, grandchildren) survive a timeout
-and contaminate later cases, hold ports, or keep burning CPU. We start the child
-in a new session and, on timeout, cancellation, or any error, signal the entire
-process group.
+fixture spawns (background shells, dev servers, grandchildren) survive and
+contaminate later cases, hold ports, or keep burning CPU. We start the child in a
+new session and signal the entire process group on every exit path -- timeout,
+cancellation, error, and ordinary success alike. Clean exit matters just as much:
+a helper that detached its stdio lets both pipes close immediately, so the
+command looks finished while the helper is still running.
 
 Safe execution of pack-controlled commands (process-group tree-kill on timeout
 and a hard byte-bounded memory cap enforced by incremental reads) is implemented
@@ -25,7 +27,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from time import monotonic
+from time import monotonic, sleep
 
 from arena.core.errors import ExecutionError
 
@@ -96,6 +98,10 @@ def _run_posix(
         start_new_session=True,  # own session => own process group for tree-kill
         preexec_fn=preexec_fn,
     )
+    # start_new_session makes the child a session and group leader, so the group
+    # id is its own pid. Captured now because os.getpgid stops working the moment
+    # the child is reaped, which is exactly when the clean-exit sweep runs.
+    pgid = process.pid
     try:
         try:
             stdout_b, stderr_b, exceeded, timed_out = _pump(process, timeout, output_limit)
@@ -124,6 +130,7 @@ def _run_posix(
                     stream.close()
             except OSError:
                 pass
+        _sweep_group(pgid)
 
 
 def _pump(
@@ -181,6 +188,38 @@ def _trim_combined(out: bytearray, err: bytearray, limit: int) -> None:
     overflow -= trim_err
     if overflow > 0:
         del out[len(out) - overflow :]
+
+
+def _sweep_group(pgid: int) -> None:
+    """Signal anything still alive in the child's process group.
+
+    A command can exit cleanly while a helper it spawned keeps running: if that
+    helper redirected its stdio away from the inherited pipes, both pipes reach
+    EOF at once, wait() returns immediately, and no other path in this module
+    ever signals the group. The leftover then holds its port and CPU into later
+    cases -- the next case's tests fail to bind and a correct repair is recorded
+    as tests_failed.
+
+    Killing by group id is safe once the leader is reaped: while any member
+    survives the id cannot be reused, and an empty group makes the probe below
+    fail immediately, so the ordinary case costs one syscall and no delay.
+    """
+    try:
+        os.killpg(pgid, 0)
+    except (ProcessLookupError, PermissionError):
+        return  # nothing left in the group
+    for sig in (signal.SIGTERM, signal.SIGKILL):
+        try:
+            os.killpg(pgid, sig)
+        except (ProcessLookupError, PermissionError):
+            return
+        deadline = monotonic() + _GROUP_GRACE_SECONDS
+        while monotonic() < deadline:
+            try:
+                os.killpg(pgid, 0)
+            except (ProcessLookupError, PermissionError):
+                return
+            sleep(0.01)
 
 
 def _terminate_group(process: subprocess.Popen) -> None:
