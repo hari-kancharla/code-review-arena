@@ -20,8 +20,21 @@ cannot satisfy patch validation in full mode.
   fixtures and the full pipeline, not to compare models. A missing `reference.patch`
   produces a structured no-patch finding that fails validation cleanly. See
   [reference-patches.md](reference-patches.md).
+- `shallow-patch`: a generic adversarial baseline that produces plausible-looking but
+  non-repairing patches. Use it to reproduce the detection-versus-validation gap on any
+  pack; CI runs it against `audit_v2` and the RealFix seed.
 - `custom-command`: benchmarks any external process, which keeps the harness
   model-agnostic.
+- `openai:<base_url>` / `http:<url>`: call a local model server directly, with no wrapper
+  script. `openai:` speaks the OpenAI chat-completions shape (Ollama, vLLM, LM Studio,
+  llama.cpp); `http:` posts the case to a plain JSON endpoint. Pass the model with
+  `--model`, or set `ARENA_HTTP_MODEL`; `ARENA_HTTP_API_KEY` is sent as a bearer token
+  when the server wants one.
+
+  ```bash
+  arena run benchmark_sets/audit_v1 --reviewer openai:http://localhost:11434/v1 \
+    --model llama3 --mode full --allow-local-execution
+  ```
 
 ## Custom command
 
