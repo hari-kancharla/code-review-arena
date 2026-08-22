@@ -252,7 +252,7 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
                       {formatNumber(dynamicF(metrics, "detection", beta))}
                     </td>
                     <td className="numeric">
-                      {row.deterministic_passes}/{row.case_count}
+                      {row.deterministic_passes}/{row.validated_eligible_case_count ?? row.case_count}
                     </td>
                     <td className="numeric">
                       {formatNumber(metrics?.patch_apply_rate)}
@@ -332,10 +332,13 @@ function validationBadge(row: LeaderboardRow) {
   if (!metrics) return <StatusBadge tone="neutral">review only</StatusBadge>;
   if ((metrics.patch_apply_rate ?? 1) === 0)
     return <StatusBadge tone="danger">patch failed</StatusBadge>;
-  if (metrics.detection_f_beta >= 0.8 && metrics.validated_case_rate <= 0.3)
+  const validated = metrics.validated_case_rate;
+  // A run with nothing execution-backed did not fail validation; it was never
+  // measured, and badging it "not validated" would read as a reviewer result.
+  if (validated == null) return <StatusBadge tone="neutral">not measured</StatusBadge>;
+  if (metrics.detection_f_beta >= 0.8 && validated <= 0.3)
     return <StatusBadge tone="warning">detected only</StatusBadge>;
-  if (metrics.validated_case_rate >= 0.8)
-    return <StatusBadge tone="success">validated</StatusBadge>;
+  if (validated >= 0.8) return <StatusBadge tone="success">validated</StatusBadge>;
   return <StatusBadge tone="danger">not validated</StatusBadge>;
 }
 

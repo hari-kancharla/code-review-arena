@@ -4,12 +4,16 @@ import { PageHeader } from "../../components/PageHeader";
 import { CaseSummary, fetchJson } from "../../lib/api";
 
 export default async function Cases() {
-  const [v1, auditV1, auditV2] = await Promise.all([
+  // Every shipped pack. A pack missing from this list is invisible in the
+  // catalogue even though it validates, certifies and runs in CI, so
+  // tests/test_published_facts.py asserts this list against benchmark_sets/.
+  const [v1, auditV1, auditV2, realfixSeedV0] = await Promise.all([
     fetchJson<CaseSummary[]>("/cases?benchmark_set=v1").catch(() => []),
     fetchJson<CaseSummary[]>("/cases?benchmark_set=audit_v1").catch(() => []),
     fetchJson<CaseSummary[]>("/cases?benchmark_set=audit_v2").catch(() => []),
+    fetchJson<CaseSummary[]>("/cases?benchmark_set=realfix_seed_v0").catch(() => []),
   ]);
-  const cases = [...auditV2, ...auditV1, ...v1];
+  const cases = [...auditV2, ...auditV1, ...v1, ...realfixSeedV0];
   return (
     <>
       <PageHeader

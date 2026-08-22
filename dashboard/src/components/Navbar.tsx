@@ -53,7 +53,7 @@ export function Navbar() {
               </Link>
             );
           })}
-          <a href="https://github.com/harihkk/code-review-arena">GitHub</a>
+          <a href="https://github.com/hari-kancharla/code-review-arena">GitHub</a>
         </nav>
       </div>
     </header>

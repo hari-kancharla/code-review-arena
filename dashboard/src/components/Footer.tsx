@@ -12,7 +12,7 @@ export function Footer() {
         <Link href="/cases">Benchmark packs</Link>
         <Link href="/methodology">Methodology</Link>
         <Link href="/docs">Docs</Link>
-        <a href="https://github.com/harihkk/code-review-arena">GitHub</a>
+        <a href="https://github.com/hari-kancharla/code-review-arena">GitHub</a>
       </nav>
     </footer>
   );

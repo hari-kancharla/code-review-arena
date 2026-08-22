@@ -22,6 +22,8 @@ export type AuditReviewerRow = {
   bug_completeness_rate: number | null;
   supported_claim_rate: number | null;
   deterministic_pass_rate: number | null;
+  // Denominator behind the rates above: execution-backed cases only.
+  validated_eligible_case_count?: number | null;
   patch_apply_rate: number | null;
   test_pass_rate: number | null;
   structural_pass_rate: number | null;
@@ -131,9 +133,14 @@ export function loadReportLeaderboardRows(): LeaderboardRow[] {
         (row.latency_per_case_ms ?? 0) * (report?.summary.case_count ?? 10),
       history_count: 1,
       completed_at: report?.generated_at ?? "",
+      // The rate is over execution-backed cases, so the count it implies must
+      // use that same denominator rather than the pack's total case count.
       deterministic_passes: Math.round(
-        (row.deterministic_pass_rate ?? 0) * (report?.summary.case_count ?? 10),
+        (row.deterministic_pass_rate ?? 0) *
+          (row.validated_eligible_case_count ?? report?.summary.case_count ?? 10),
       ),
+      validated_eligible_case_count:
+        row.validated_eligible_case_count ?? report?.summary.case_count ?? null,
       deterministic_metrics:
         row.detection_f_beta == null || row.validated_f_beta == null
           ? null

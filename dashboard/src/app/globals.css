@@ -1,6 +1,64 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Base reset.
+ *
+ * These rules were previously supplied by Tailwind's preflight. The dashboard
+ * used no Tailwind utility classes -- every class in the markup is defined
+ * below -- so the framework was carrying a whole build dependency (and its
+ * major-version migrations) to provide this reset alone. The stylesheet was
+ * authored against preflight, so the parts it genuinely relies on are kept
+ * here verbatim in effect: the 1.5 root line-height, headings inheriting their
+ * font weight, form controls inheriting typography, and the border defaults.
+ */
+html {
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 100%;
+  font-weight: inherit;
+  line-height: inherit;
+  color: inherit;
+  margin: 0;
+  padding: 0;
+}
+button,
+[type="button"],
+[type="reset"],
+[type="submit"] {
+  -webkit-appearance: button;
+  background-color: transparent;
+  background-image: none;
+  text-transform: none;
+}
+*,
+::before,
+::after {
+  border-width: 0;
+  border-style: solid;
+  border-color: #e5e7eb;
+}
+img,
+svg,
+video,
+canvas {
+  display: block;
+  vertical-align: middle;
+  max-width: 100%;
+  height: auto;
+}
 
 :root {
   --background: #ffffff;

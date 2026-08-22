@@ -60,6 +60,14 @@ export default async function Runs() {
 }
 
 function runStatus(run: RunSummary) {
+  // Validity outranks the score. A run the harness rejected -- a tampered pack,
+  // a backend that never executed, cases that crashed -- must never render as a
+  // success, however good its numbers look: on an invalid run the numbers are
+  // precisely what cannot be trusted.
+  if (run.run_status && run.run_status !== "complete") {
+    const tone = run.run_status === "invalid" || run.run_status === "failed" ? "danger" : "warning";
+    return <StatusBadge tone={tone}>{`Not comparable - ${run.run_status}`}</StatusBadge>;
+  }
   if (run.validated_case_rate == null) return <StatusBadge tone="neutral">Review only</StatusBadge>;
   if (run.validated_case_rate === 1) return <StatusBadge tone="success">Validated</StatusBadge>;
   if ((run.detection_f_beta ?? 0) > run.validated_case_rate) {

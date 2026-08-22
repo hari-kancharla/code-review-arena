@@ -36,7 +36,7 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
       {metrics ? (
         <>
           <section className="metrics-eight">
-            <MetricCard label="Validated case rate" value={metrics.validated_case_rate.toFixed(3)} note="cases fully repaired" emphasis />
+            <MetricCard label="Validated case rate" value={rate(metrics.validated_case_rate)} note="cases fully repaired" emphasis />
             <MetricCard label="Detection F-beta" value={metrics.detection_f_beta.toFixed(3)} />
             <MetricCard label="Deterministic Pass Rate" value={rate(metrics.deterministic_pass_rate)} />
             <MetricCard label="Patch Apply Rate" value={rate(metrics.patch_apply_rate)} />
@@ -56,7 +56,9 @@ export default async function RunPage({ params }: { params: Promise<{ id: string
             </div>
             <div className="panel">
               <h2>Outcome interpretation</h2>
-              {metrics.detection_f_beta > metrics.validated_case_rate ? (
+              {metrics.validated_case_rate == null ? (
+                <p className="callout">No execution-backed case in this run, so repair was not measured.</p>
+              ) : metrics.detection_f_beta > metrics.validated_case_rate ? (
                 <p className="callout warning">Detected only - fix not validated. The reviewer identified issues that did not complete execution-backed validation.</p>
               ) : <p className="pass-text">Detection and validated repair outcomes align for this run.</p>}
               <FailureReasonList reasons={Array.from(new Set(reasons))} />
@@ -122,6 +124,9 @@ function currency(value: number | null) {
 function runBadge(run: RunDetail) {
   const metrics = run.deterministic_metrics;
   if (!metrics) return <StatusBadge tone="neutral">Review only</StatusBadge>;
+  // Not measured is not a failure: the run had no execution-backed case.
+  if (metrics.validated_case_rate == null)
+    return <StatusBadge tone="neutral">Not measured</StatusBadge>;
   if (metrics.validated_case_rate === 1) return <StatusBadge tone="success">Validated</StatusBadge>;
   if (metrics.detection_f_beta > metrics.validated_case_rate) {
     return <StatusBadge tone="warning">Detected only - fix not validated</StatusBadge>;

@@ -25,6 +25,7 @@ type Baseline = {
     validated_f_beta: number | null;
     validated_case_rate: number | null;
     deterministic_passes: number;
+    validated_eligible_case_count?: number | null;
     case_count: number;
   };
 };
@@ -44,7 +45,7 @@ python -m pip install -e ".[dev]"
 arena validate benchmark_sets/audit_v1
 arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow-local-execution
 arena run benchmark_sets/audit_v1 --reviewer control:keyword_gamer --mode full --allow-local-execution
-arena leaderboard runs/ --metric validated_case_rate --beta 1.0`;
+arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified`;
 
 function loadSnapshot(): { snapshot: Snapshot | null; error: string | null } {
   const file = path.join(process.cwd(), "public", "verification.json");
@@ -187,7 +188,7 @@ export default function VerifyPage() {
                         </td>
                         <td>
                           {row.metrics
-                            ? `${row.metrics.deterministic_passes}/${row.metrics.case_count}`
+                            ? `${row.metrics.deterministic_passes}/${row.metrics.validated_eligible_case_count ?? row.metrics.case_count}`
                             : "-"}
                         </td>
                         <td>{row.meaning}</td>
@@ -264,7 +265,7 @@ function BaselineHealth({
         checked_at: baseline.checked_at,
         command: baseline.command,
         explanation: baseline.metrics
-          ? `${baseline.metrics.deterministic_passes}/${baseline.metrics.case_count} deterministic passes; validated case rate ${metric(baseline.metrics.validated_case_rate)}.`
+          ? `${baseline.metrics.deterministic_passes}/${baseline.metrics.validated_eligible_case_count ?? baseline.metrics.case_count} deterministic passes; validated case rate ${metric(baseline.metrics.validated_case_rate)}.`
           : "No saved audit_v1 control run found.",
       }}
     />

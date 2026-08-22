@@ -22,6 +22,10 @@ export type LeaderboardRow = {
   benchmark_set?: string;
   detail_available?: boolean;
   deterministic_passes: number;
+  // Denominator for deterministic_passes: the execution-backed cases only,
+  // which is what validated_case_rate is computed over. Optional because rows
+  // stored before this field existed carry no value; fall back to case_count.
+  validated_eligible_case_count?: number | null;
   deterministic_metrics: DeterministicMetrics | null;
 };
 
@@ -35,9 +39,11 @@ export type DeterministicMetrics = {
   validated_f1: number;
   validated_f_beta: number;
   beta: number;
-  deterministic_pass_rate: number;
-  validated_case_rate: number;
-  complete_repair_rate: number;
+  // null when the run had no execution-backed case: the rate was not measured,
+  // which is different from a reviewer that repaired nothing.
+  deterministic_pass_rate: number | null;
+  validated_case_rate: number | null;
+  complete_repair_rate: number | null;
   bug_completeness_rate: number;
   supported_claim_rate: number | null;
   patch_apply_rate: number | null;
@@ -50,7 +56,7 @@ export type DeterministicMetrics = {
 
 export type CaseSummary = {
   id: string;
-  benchmark_set: "v1" | "audit_v1" | "audit_v2";
+  benchmark_set: "v1" | "audit_v1" | "audit_v2" | "realfix_seed_v0";
   title: string;
   category: string;
   severity: string;
@@ -181,6 +187,16 @@ export type RunSummary = {
   patch_apply_rate: number | null;
   structural_pass_rate: number | null;
   test_pass_rate: number | null;
+  // Run validity. Nullable because rows written before v2 carry no validity at
+  // all; the badge treats unknown as untrusted rather than as success.
+  schema_version: number | null;
+  run_status: string | null;
+  execution_backend: string | null;
+  coverage_rate: number | null;
+  completed_case_count: number | null;
+  failed_case_count: number | null;
+  skipped_case_count: number | null;
+  eligible_case_count: number | null;
 };
 
 export type CaseTrace = CaseResult & {

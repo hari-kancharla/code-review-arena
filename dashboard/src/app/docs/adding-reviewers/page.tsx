@@ -2,16 +2,23 @@ import { CodeBlock } from "../../../components/CodeBlock";
 import { DocsLayout } from "../../../components/DocsLayout";
 import { PageHeader } from "../../../components/PageHeader";
 
+// Kept in step with the harness parser by tests/test_published_facts.py, which
+// parses this exact text and requires an "exact" outcome. An example the parser
+// rejects costs a reviewer author the invalid-output penalty on every case.
 const schema = `{
   "findings": [{
     "title": "specific production bug",
+    "summary": "what is wrong and why it matters",
+    "category": "correctness",
+    "severity": "high",
     "file": "path/to/file.py",
     "line_start": 1,
     "line_end": 4,
+    "evidence": "the code or behaviour that shows it",
+    "confidence": 0.91,
     "suggested_fix": "natural language repair",
     "suggested_patch": "diff --git ...",
-    "patch_confidence": 0.88,
-    "confidence": 0.91
+    "patch_confidence": 0.88
   }],
   "overall_risk": "high",
   "review_summary": "short summary"

@@ -38,11 +38,14 @@ const evaluationStages = [
   },
 ];
 
+// Case counts mirror each pack's manifest.yaml. They are duplicated here because
+// this strip renders without an API, so a pack that gains or loses a case must be
+// updated here too; tests/test_dashboard_pack_table.py asserts they agree.
 const benchmarkPacks = [
   {
     id: "benchmark_sets/v1",
     label: "v1",
-    cases: 10,
+    cases: 9,
     purpose: "Baseline harness cases",
     validation: "review scoring + validation",
   },
@@ -63,7 +66,7 @@ const benchmarkPacks = [
   {
     id: "benchmark_sets/realfix_seed_v0",
     label: "realfix_seed_v0",
-    cases: 3,
+    cases: 5,
     purpose: "Historical-fix methodology seed",
     validation: "Docker-backed patch apply + tests",
   },
@@ -437,8 +440,18 @@ function MetricBar({
 }: {
   label: string;
   tone: "accent" | "neutral";
-  value: number;
+  // null means the run had no execution-backed case, which is not the same as a
+  // rate of zero and must not be drawn as an empty bar.
+  value: number | null;
 }) {
+  if (value == null) {
+    return (
+      <div className={`report-bar ${tone === "accent" ? "accent" : ""}`}>
+        <span>{label}</span>
+        <em>not measured</em>
+      </div>
+    );
+  }
   return (
     <div className={`report-bar ${tone === "accent" ? "accent" : ""}`}>
       <span>{label}</span>
@@ -472,9 +485,11 @@ function LeaderboardPreview({ rows }: { rows: LeaderboardRow[] }) {
         <tbody>
           {rows.map((row, index) => {
             const metrics = row.deterministic_metrics!;
+            const validated = metrics.validated_case_rate;
             const detectedOnly =
+              validated != null &&
               metrics.detection_f_beta >= 0.8 &&
-              metrics.validated_case_rate <= 0.3;
+              validated <= 0.3;
             return (
               <tr
                 key={row.run_id}
@@ -491,26 +506,30 @@ function LeaderboardPreview({ rows }: { rows: LeaderboardRow[] }) {
                   {metrics.detection_f_beta.toFixed(3)}
                 </td>
                 <td className="numeric strong-metric">
-                  {metrics.validated_case_rate.toFixed(3)}
+                  {validated == null ? "n/a" : validated.toFixed(3)}
                 </td>
                 <td className="numeric">
-                  {row.deterministic_passes}/{row.case_count}
+                  {row.deterministic_passes}/{row.validated_eligible_case_count ?? row.case_count}
                 </td>
                 <td>
                   <StatusBadge
                     tone={
-                      detectedOnly
-                        ? "warning"
-                        : metrics.validated_case_rate >= 0.8
-                          ? "success"
-                          : "danger"
+                      validated == null
+                        ? "neutral"
+                        : detectedOnly
+                          ? "warning"
+                          : validated >= 0.8
+                            ? "success"
+                            : "danger"
                     }
                   >
-                    {detectedOnly
-                      ? "detected only"
-                      : metrics.validated_case_rate >= 0.8
-                        ? "validated"
-                        : "not validated"}
+                    {validated == null
+                      ? "not measured"
+                      : detectedOnly
+                        ? "detected only"
+                        : validated >= 0.8
+                          ? "validated"
+                          : "not validated"}
                   </StatusBadge>
                 </td>
               </tr>
