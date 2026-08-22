@@ -15,6 +15,7 @@ from arena.execution.commands import (
 )
 from arena.execution.test_executor import TestExecutionRequest, TestExecutor
 from arena.reviewers.base import BaseReviewer
+from tests.conftest import pack_case_count
 
 
 def test_parse_accepts_string_argv_and_command_lists():
@@ -126,7 +127,7 @@ def test_wall_clock_budget_stops_scheduling(tmp_path):
         max_wall_seconds=0.0,
     )
     assert run.case_results == []
-    assert len(run.skipped_case_ids) == 10
+    assert len(run.skipped_case_ids) == pack_case_count()
     assert "max_wall_seconds" in (run.budget_stopped_reason or "")
     assert run.total_score == 0.0
 
@@ -141,5 +142,5 @@ def test_cost_budget_stops_scheduling_after_threshold(tmp_path):
     )
     # 1.0 per case: two cases run before the budget trips.
     assert len(run.case_results) == 2
-    assert len(run.skipped_case_ids) == 8
+    assert len(run.skipped_case_ids) == pack_case_count() - 2
     assert "max_cost" in (run.budget_stopped_reason or "")

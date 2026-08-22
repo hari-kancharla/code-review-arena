@@ -13,6 +13,7 @@ from arena.benchmark.pack_hash import pack_checksum, stored_checksum
 from arena.benchmark.snapshot import snapshot_pack
 from arena.core import limits
 from arena.core.errors import SnapshotError
+from tests.conftest import pack_case_count
 
 PACKS = ("v1", "audit_v1", "audit_v2")
 
@@ -46,7 +47,7 @@ def test_shipped_pack_snapshots_validates_and_checksum_unchanged(name):
     source = Path("benchmark_sets") / name
     with snapshot_pack(source) as snap:
         cases = snap.load_and_validate()
-        assert len(cases) == 10
+        assert len(cases) == pack_case_count(name)
         assert snap.checksum == pack_checksum(source) == stored_checksum(source)
         assert str(cases[0].case_dir).startswith(str(snap.root))
         snap.verify()
