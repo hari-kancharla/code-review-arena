@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
+
+# Pack directory names are identifiers: letters, digits, dot, underscore, dash,
+# and never a name made only of dots (which would resolve to the root itself).
+_PACK_NAME = re.compile(r"(?!\.+$)[A-Za-z0-9][A-Za-z0-9._-]*")
 
 DEFAULT_BENCHMARK_SET = Path("benchmark_sets/v1")
 DEFAULT_RUNS_DIR = Path("runs")
@@ -71,11 +76,13 @@ def trusted_pack_hashes() -> set[str]:
 def resolve_benchmark_set(name: str) -> Path | None:
     """Resolve a stored benchmark-set name to a directory under benchmark_root.
 
-    Names are identifiers, not paths: anything containing separators or parent
-    references is rejected so stored run rows cannot steer the server outside
-    the configured root.
+    Names are identifiers, not paths, so only identifier characters are allowed.
+    An allowlist rather than a blocklist of separators: a blocklist admitted a
+    bare "." (and " ."), which pathlib normalizes away, so the "pack" resolved to
+    the benchmark root itself -- snapshotting and hashing every shipped pack
+    before failing on the missing manifest.
     """
-    if not name or "/" in name or "\\" in name or ".." in name:
+    if not name or not _PACK_NAME.fullmatch(name):
         return None
     candidate = benchmark_root() / name
     return candidate if candidate.is_dir() else None
