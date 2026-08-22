@@ -60,6 +60,19 @@ def leaderboard(
             str(row["pack"]),
         )
     Console(width=140).print(table)
+    if not rows and not include_unverified:
+        # An empty table with no explanation reads as "the harness produced
+        # nothing", when the usual cause is simply that every run was executed
+        # locally and the default view is restricted to verified runs.
+        filtered = len(
+            leaderboard_rows(runs_dir, metric=metric, beta=beta, include_unverified=True)
+        )
+        if filtered:
+            Console(stderr=True).print(
+                f"[yellow]NOTE[/yellow] {filtered} run(s) were excluded as unverified "
+                "(a verified run needs Docker and --expected-pack-sha256). "
+                "Re-run with --include-unverified to inspect them."
+            )
     if show_ci:
         Console(stderr=True).print(
             "[dim]Bracketed range is the Wilson 95% interval; at these pack sizes it is "

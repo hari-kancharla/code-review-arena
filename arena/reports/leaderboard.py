@@ -40,6 +40,7 @@ def eligibility_from_fields(
     coverage_rate: float,
     pack_digest_externally_verified: bool,
     non_exact_output_used: bool | None = None,
+    reviewer_oracle_reachable: bool | None = None,
     include_unverified: bool = False,
 ) -> bool:
     """The single leaderboard-eligibility policy, in terms of plain fields.
@@ -64,6 +65,10 @@ def eligibility_from_fields(
         and coverage_rate == 1.0
         and pack_digest_externally_verified is True
         and non_exact_output_used is False
+        # A reviewer that could read the pack's answer key was not measured
+        # blind: a wrapper that echoes reference.patch scores a perfect 1.000 on
+        # every metric. Unknown (None, an older run) is treated as unsafe.
+        and reviewer_oracle_reachable is False
     )
 
 
@@ -76,6 +81,7 @@ def leaderboard_eligible(run: RunResult, *, include_unverified: bool = False) ->
         coverage_rate=run.coverage_rate,
         pack_digest_externally_verified=run.metadata.pack_digest_externally_verified,
         non_exact_output_used=run.metadata.non_exact_output_used,
+        reviewer_oracle_reachable=run.metadata.reviewer_oracle_reachable,
         include_unverified=include_unverified,
     )
 
