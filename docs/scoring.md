@@ -19,9 +19,14 @@ After the positive subtotal, each unmatched finding subtracts
 
 ## Structured output handling
 
-The parser first attempts strict JSON, then removes common JSON fencing/trailing-comma
-noise and retries. Model-backed adapters may issue one repair request. A result still not
-matching the typed schema is scored as invalid output while preserving its raw response.
+Parsing is exact by default, and exactness is the comparable contract: the raw response
+must be exactly one strict JSON object validating as `ReviewResult`. There is no
+Markdown-fence stripping, no brace extraction, no trailing-comma removal, no bare-list
+wrapping and no field insertion -- anything else is scored as invalid output (with the
+invalid-output penalty) while its raw response is preserved. Tolerant salvage exists but
+runs only when a caller opts in with `enable_repair`; it is development-only, it records
+every transformation and dropped finding, and it marks the run non-comparable, so a
+salvaged run is excluded from the default leaderboard.
 
 ## Deterministic scoring
 
