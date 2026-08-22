@@ -64,10 +64,27 @@ _RAW_STATUS = frozenset({"A", "M", "D", "T", "R", "C"})
 PROTECTED_BASENAMES = frozenset(
     {
         "conftest.py",
+        # Every name pytest itself searches for a config in, in its own discovery
+        # order (_pytest.config.findpaths.locate_config). The dotted and .toml
+        # spellings outrank pytest.ini/pyproject.toml/tox.ini/setup.cfg, so leaving
+        # any of them unprotected lets a patch install `addopts` (for example
+        # `-p <plugin>`, which explicit -p loads even under
+        # PYTEST_DISABLE_PLUGIN_AUTOLOAD) and force a green exit code while the
+        # seeded bug is untouched and the suite still reports failures.
+        "pytest.toml",
+        ".pytest.toml",
         "pytest.ini",
+        ".pytest.ini",
         "tox.ini",
         "setup.cfg",
         "pyproject.toml",
+        # The pinned test command is `<interpreter> -m pytest`, which puts the
+        # workspace root first on sys.path, so a root-level `pytest.py` module or
+        # `pytest/` package shadows the real runner and can exit 0 without ever
+        # collecting a test. Interpreter-startup shadowing is already covered by
+        # sitecustomize/usercustomize below.
+        "pytest.py",
+        "pytest",
         "sitecustomize.py",
         "usercustomize.py",
         ".git",
