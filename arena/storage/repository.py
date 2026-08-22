@@ -169,8 +169,16 @@ class RunRepository:
                 "cost_per_true_positive, detection_precision, detection_recall, detection_f1, "
                 "detection_f_beta, validated_precision, validated_recall, validated_f1, "
                 "validated_f_beta, validated_case_rate, deterministic_pass_rate, "
-                "cost_per_validated_fix, "
-                "latency_per_case_ms FROM runs ORDER BY completed_at DESC"
+                "cost_per_validated_fix, latency_per_case_ms, "
+                # Validity columns travel with the metrics: without them the runs
+                # page had nothing to judge trust by and derived its badge from
+                # validated_case_rate alone, so a run the harness rejected (a
+                # tampered pack, where the tampering is what made every case
+                # "pass") rendered as a green "Validated".
+                "schema_version, run_status, execution_backend, coverage_rate, "
+                "completed_case_count, failed_case_count, skipped_case_count, "
+                "eligible_case_count "
+                "FROM runs ORDER BY completed_at DESC"
             ).fetchall()
         return [dict(row) for row in rows]
 
@@ -202,6 +210,7 @@ class RunRepository:
                     metadata.get("pack_digest_externally_verified", False)
                 ),
                 non_exact_output_used=metadata.get("non_exact_output_used"),
+                reviewer_oracle_reachable=metadata.get("reviewer_oracle_reachable"),
                 include_unverified=include_unverified,
             ):
                 continue
@@ -220,6 +229,15 @@ class RunRepository:
         for key, data in latest.items():
             case_results = data.get("case_results") or []
             metrics = data.get("deterministic_metrics")
+            # Count passes over the SAME population validated_case_rate is computed
+            # on. Counting every case put a fraction next to the rate that
+            # disagreed with it, and silently re-included the cases the rate
+            # excludes for having no runnable suite.
+            eligible_cases = [
+                case
+                for case in case_results
+                if (case.get("deterministic_case_score") or {}).get("validation_eligible")
+            ]
             summaries.append(
                 {
                     "reviewer": data["reviewer"],
@@ -236,8 +254,12 @@ class RunRepository:
                     "history_count": history[key],
                     "completed_at": data["completed_at"],
                     "deterministic_passes": sum(
-                        case.get("deterministic_pass") is True for case in case_results
+                        case.get("deterministic_pass") is True for case in eligible_cases
                     ),
+                    # The denominator that pass count belongs over, so a consumer
+                    # never has to pair it with case_count and get a fraction the
+                    # rate beside it contradicts.
+                    "validated_eligible_case_count": len(eligible_cases),
                     "deterministic_metrics": metrics,
                 }
             )
