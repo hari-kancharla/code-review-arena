@@ -8,7 +8,11 @@ from arena.benchmark.snapshot import snapshot_pack
 from arena.core.config import benchmark_root, database_path, resolve_benchmark_set
 from arena.core.errors import ReviewerError
 from arena.core.registry import create_reviewer
-from arena.server.auth import require_api_token, server_local_execution_enabled
+from arena.server.auth import (
+    require_api_token,
+    reviewer_needs_execution_optin,
+    server_local_execution_enabled,
+)
 from arena.server.jobs import job_queue
 from arena.server.schemas import CreateRunRequest
 from arena.storage.repository import RunRepository
@@ -40,10 +44,29 @@ def create_run(request: CreateRunRequest) -> dict[str, object]:
             detail="Local execution over HTTP is disabled; set "
             "ARENA_SERVER_ALLOW_LOCAL_EXECUTION=1 on the server to opt in.",
         )
+    # Resolve the spec first so an unknown or malformed reviewer still reports a
+    # helpful 400 rather than being masked by the 403 below. Constructing a
+    # reviewer is inert -- every implementation only stores its configuration, and
+    # nothing is spawned or fetched until the job runs.
     try:
         reviewer = create_reviewer(request.reviewer, command=request.command)
     except ReviewerError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    # Then gate the reviewer spec itself, not just the pack-execution flag. A
+    # custom-command reviewer spawns a caller-supplied process, and an
+    # openai:/http: reviewer makes the server fetch a caller-supplied URL; both
+    # are things an unauthenticated POST must not be able to do while
+    # allow_local_execution is still false.
+    if (
+        reviewer_needs_execution_optin(request.reviewer, request.command)
+        and not server_local_execution_enabled()
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="This reviewer runs a local command or calls an external URL, which is "
+            "disabled over HTTP; set ARENA_SERVER_ALLOW_LOCAL_EXECUTION=1 on the server "
+            "to opt in.",
+        )
 
     def execute() -> str:
         return run_benchmark(
@@ -88,13 +111,27 @@ def run_case_detail(run_id: str, case_id: str) -> dict[str, object]:
             benchmark_dir = resolve_benchmark_set(run.benchmark_set)
             if benchmark_dir is None:
                 return result.model_dump(mode="json")
-            # Diff/ground-truth context comes from the immutable snapshot.
+            # Diff/ground-truth context comes from the immutable snapshot -- but
+            # of the pack as it is NOW, while the score beside it was measured
+            # against the pack as it was THEN. Editing a pack in place therefore
+            # used to render a stored score next to a completely different bug,
+            # presented as that run's evidence. Serve the context only when the
+            # pack still hashes to what the run recorded.
+            recorded = run.metadata.pack_checksum
             with snapshot_pack(benchmark_dir) as snapshot:
+                if recorded is not None and snapshot.checksum != recorded:
+                    return {
+                        **result.model_dump(mode="json"),
+                        "pack_drifted": True,
+                        "recorded_pack_checksum": recorded,
+                        "current_pack_checksum": snapshot.checksum,
+                    }
                 for case in snapshot.load():
                     if case.id == case_id:
                         context = build_context(case)
                         return {
                             **result.model_dump(mode="json"),
+                            "pack_drifted": False,
                             "diff": context.diff,
                             "ground_truth": case.ground_truth.model_dump(mode="json"),
                             "stack": case.stack,

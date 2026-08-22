@@ -2,8 +2,8 @@
 
 Intended for local or trusted-network use; do not expose publicly as-is.
 Set ARENA_API_TOKEN to require a token on run creation, and leave
-ARENA_SERVER_ALLOW_LOCAL_EXECUTION unset so HTTP callers cannot trigger
-local command execution.
+ARENA_SERVER_ALLOW_LOCAL_EXECUTION unset so HTTP callers can neither trigger
+local command execution nor steer the server into calling a URL they chose.
 """
 
 from fastapi import FastAPI

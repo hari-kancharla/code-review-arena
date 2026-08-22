@@ -1,19 +1,26 @@
 from pathlib import Path
-from typing import Literal
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 
 from arena.benchmark.artifacts import load_reference_patch
 from arena.benchmark.case_loader import build_context
 from arena.benchmark.snapshot import snapshot_pack
 from arena.core.config import resolve_benchmark_set
 from arena.core.errors import ValidationError
+from arena.core.limits import BENCHMARK_SET_NAME_LEN
 
 router = APIRouter(prefix="/cases", tags=["cases"])
-BenchmarkSet = Literal["v1", "audit_v1", "audit_v2"]
+# Packs are resolved dynamically rather than hardcoded: a Literal list silently
+# excluded every pack added after it was written (realfix_seed_v0 shipped, is
+# validated and certified in CI, and was still rejected here with a 422). The
+# name is only length-bounded; resolve_benchmark_set does the real validation --
+# it rejects path separators and `..` and 404s an unknown pack, which is the same
+# policy POST /runs already uses.
+BenchmarkSet = Annotated[str, Query(max_length=BENCHMARK_SET_NAME_LEN)]
 
 
-def _benchmark_path(benchmark_set: BenchmarkSet) -> Path:
+def _benchmark_path(benchmark_set: str) -> Path:
     # Resolve against the configured benchmark root (not the process cwd) so the
     # server works wherever it is launched from; 404 on an unknown pack.
     path = resolve_benchmark_set(benchmark_set)
