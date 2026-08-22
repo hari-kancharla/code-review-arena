@@ -29,6 +29,10 @@ from arena.validators.source_text import extract_comments
 _TEXT_SUFFIXES = (".py", ".ts", ".tsx", ".js", ".jsx", ".java", ".sql")
 _MIN_PHRASE_LENGTH = 3
 
+# Reported when a curated phrase cannot be checked at all. Not a leak: a hole in
+# the leak guarantee, which is worse, because the pack otherwise reports clean.
+UNSCANNABLE_PHRASE = "unscannable_phrase"
+
 
 @dataclass(frozen=True)
 class ContaminationWarning:
@@ -38,17 +42,48 @@ class ContaminationWarning:
     location: str
 
     def render(self) -> str:
+        if self.surface == UNSCANNABLE_PHRASE:
+            return f"{self.case_id}: {self.phrase!r} cannot be scanned for leaks ({self.location})"
         return f"{self.case_id}: {self.phrase!r} leaks via {self.surface} ({self.location})"
 
 
-def _phrases(case: BenchmarkCase) -> set[str]:
+def _phrases(case: BenchmarkCase) -> tuple[set[str], dict[str, str]]:
+    """The curated vocabulary to scan for, and the phrases that cannot be scanned.
+
+    A phrase this scanner cannot check is more dangerous than one that leaks,
+    because the pack still reports clean: the operator is told the case holds no
+    leak when in truth one phrase was never looked at. Two ways that happens, and
+    both are reported rather than dropped:
+
+    - shorter than ``_MIN_PHRASE_LENGTH``, which exists to keep one- and
+      two-character tokens from matching everything, and
+    - not matchable by ``_phrase_in`` even against itself. A single-token phrase
+      is matched between word boundaries, so one that begins or ends with a
+      non-word character (``\\Z``, ``$``, ``--``) has no boundary to anchor
+      against and can never match any text at all.
+
+    Self-matching is the exact test for the second case: a phrase that cannot be
+    found inside a copy of itself cannot be found anywhere.
+    """
     phrases: set[str] = set()
+    unscannable: dict[str, str] = {}
     for bug in case.ground_truth.bugs:
         for phrase in (*bug.must_mention, *bug.concepts, *bug.acceptable_fix_keywords):
             cleaned = phrase.strip()
-            if len(cleaned) >= _MIN_PHRASE_LENGTH:
+            if not cleaned:
+                continue
+            if len(cleaned) < _MIN_PHRASE_LENGTH:
+                unscannable[cleaned] = (
+                    f"shorter than {_MIN_PHRASE_LENGTH} characters, so the scan skips it"
+                )
+            elif not _phrase_in(cleaned, cleaned):
+                unscannable[cleaned] = (
+                    "begins or ends with a non-word character, so the word-boundary "
+                    "match can never find it"
+                )
+            else:
                 phrases.add(cleaned)
-    return phrases
+    return phrases, unscannable
 
 
 def _phrase_in(phrase: str, text: str) -> bool:
@@ -81,7 +116,10 @@ def scan_case(case: BenchmarkCase) -> list[ContaminationWarning]:
     warnings: list[ContaminationWarning] = []
     # Sort phrases so warning order is deterministic when several phrases match
     # the same line, independent of set hash ordering.
-    phrases = sorted(_phrases(case))
+    scannable, unscannable = _phrases(case)
+    phrases = sorted(scannable)
+    for phrase, reason in sorted(unscannable.items()):
+        warnings.append(ContaminationWarning(case.id, UNSCANNABLE_PHRASE, phrase, reason))
 
     diff = load_diff(case.case_dir / case.input.diff)
     for number, content in _added_lines(diff):
