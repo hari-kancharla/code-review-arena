@@ -6,7 +6,9 @@ import json
 import platform
 import shutil
 import subprocess
+import sys
 import warnings
+from collections.abc import Sequence
 from datetime import datetime
 from pathlib import Path
 from time import monotonic
@@ -14,7 +16,9 @@ from typing import Literal
 
 from arena import __version__
 from arena.benchmark.case_loader import build_context, load_manifest
+from arena.benchmark.exposure import assign_cohort
 from arena.benchmark.snapshot import SNAPSHOT_MANIFEST_VERSION, PackSnapshot, snapshot_pack
+from arena.core import limits
 from arena.core.config import (
     PROMPT_VERSION,
     database_path,
@@ -52,8 +56,10 @@ from arena.reports.markdown_report import write_markdown_report
 from arena.reviewers.base import BaseReviewer
 from arena.scoring.deterministic_scorer import (
     aggregate_deterministic_metrics,
+    is_execution_backed,
     score_deterministic_case,
 )
+from arena.scoring.exposure_metrics import aggregate_exposure_metrics
 from arena.scoring.scorer import apply_execution_fix_quality, score_case
 from arena.storage.repository import RunRepository
 from arena.tools.static_analyzer import run_static_analysis
@@ -92,9 +98,49 @@ def _git_dirty() -> bool | None:
     return bool(result.stdout.strip())
 
 
+# Failure reasons that stop a case counting as an execution-validated repair.
+# A module constant rather than a literal buried in the attribution function, so
+# a new reason cannot be added to the scorer while silently missing this set --
+# which would turn the very case it describes into a validated repair.
+_BLOCKING_FAILURE_REASONS = frozenset(
+    {
+        "patch_required_but_missing",
+        "patch_apply_failed",
+        "tests_failed",
+        # An execution that produced no verdict blocks just as firmly as a failing
+        # one: nothing was confirmed either way.
+        "execution_inconclusive",
+        "structural_validation_failed",
+        "test_integrity_violation",
+        "no_execution_evidence",
+    }
+)
+
+
+def _run_level_beta(cases: Sequence[BenchmarkCase]) -> float:
+    """The single beta a whole-run F-beta is reported at.
+
+    A run-level F-beta is only well defined when every case agrees on beta. When
+    a pack declares more than one, no single value is faithful, so this falls
+    back to the balanced 1.0 and says so rather than silently adopting one case's
+    weighting for the entire run.
+    """
+    declared = {case.metrics.beta for case in cases}
+    if len(declared) == 1:
+        return declared.pop()
+    if declared:
+        print(
+            f"WARNING: pack declares mixed metrics.beta values {sorted(declared)}; "
+            "reporting run-level F-beta at beta=1.0. Pass --beta to choose explicitly.",
+            file=sys.stderr,
+        )
+    return 1.0
+
+
 def _run_status(
     *,
     results: int,
+    failed: int,
     skipped: bool,
     checksum_verified: bool | None,
     execution_required: bool,
@@ -103,11 +149,16 @@ def _run_status(
 ) -> RunStatus:
     """Classify a finished run's trust level (see RunStatus).
 
-    A tampered pack invalidates the whole run; a run that produced no results at
-    all failed; a run that needed test execution but whose backend was never
-    available (nothing executed, something tried) is invalid because no repair
-    could be judged; a budget-truncated run, or one where some cases ran and some
-    could not, is partial; otherwise it is complete.
+    Implements the documented invariant (docs/trusted-evaluation-architecture.md):
+    ``complete`` requires zero failed, zero skipped, completed == eligible, and
+    every required execution conclusive.
+
+    A tampered pack invalidates the whole run; a run that produced no usable
+    result at all failed; a run that needed test execution but whose backend was
+    never available (nothing executed, something tried) is invalid because no
+    repair could be judged; a budget-truncated run, one where a case raised
+    inside the harness, or one where some cases ran and some could not, is
+    partial; otherwise it is complete.
     """
     if checksum_verified is False:
         return "invalid"
@@ -116,9 +167,13 @@ def _run_status(
         return "partial"
     if results == 0:
         return "failed"
+    # A case that raised inside the harness contributes a placeholder result, not
+    # a measurement. If none survived, the run carries no usable result at all.
+    if failed >= results:
+        return "failed"
     if execution_required and unavailable > 0 and executed == 0:
         return "invalid"
-    if skipped or (execution_required and unavailable > 0):
+    if skipped or failed or (execution_required and unavailable > 0):
         return "partial"
     return "complete"
 
@@ -330,12 +385,18 @@ def _evaluate_case(
         # Snapshot the hidden tests so candidate code that rewrites them mid-run
         # is caught even though the patch itself could not declare those paths.
         before_tests = file_manifest(tests_root) if tests_root else {}
+        # A timeout means different things depending on WHOSE budget ran out. If
+        # the run deadline clamped the case's own timeout, the suite was cut short
+        # by the harness, and charging that to the reviewer publishes 0% for what
+        # may be a perfect repair -- on a run that still calls itself complete.
+        test_timeout = _effective_timeout(case.execution.timeout_seconds, deadline)
+        deadline_truncated = test_timeout < case.execution.timeout_seconds
         executed_tests = test_executor.execute(
             TestExecutionRequest(
                 case_id=case.id,
                 workspace_path=Path(patch.workspace_path),
                 test_command=case.execution.test_command,
-                timeout_seconds=_effective_timeout(case.execution.timeout_seconds, deadline),
+                timeout_seconds=test_timeout,
                 docker_image=case.execution.docker_image,
                 allow_local_execution=allow_local_execution,
                 # Pin the hidden tests read-only in Docker so a patch cannot
@@ -343,6 +404,8 @@ def _evaluate_case(
                 readonly_paths=[tests_dir] if tests_dir else [],
             )
         )
+        if executed_tests.timed_out and deadline_truncated:
+            executed_tests = executed_tests.model_copy(update={"error": "test_deadline_truncated"})
         if tests_root:
             integrity_changes = manifest_changes(before_tests, file_manifest(tests_root))
     validators = []
@@ -371,16 +434,8 @@ def _evaluate_case(
                 "failure_reasons": [*deterministic.failure_reasons, "test_integrity_violation"],
             }
         )
-    blocking = {
-        "patch_required_but_missing",
-        "patch_apply_failed",
-        "tests_failed",
-        "structural_validation_failed",
-        "test_integrity_violation",
-        "no_execution_evidence",
-    }
     execution_validated = deterministic.patch_applied and not (
-        blocking & set(deterministic.failure_reasons)
+        _BLOCKING_FAILURE_REASONS & set(deterministic.failure_reasons)
     )
     if executed_tests is None:
         case_backend: ExecutionBackend = "none"
@@ -393,11 +448,22 @@ def _evaluate_case(
     # Execution was attempted (we built a request) but the backend itself was
     # missing, so the repair never got a verdict. Content-level skips (a bad
     # test command, a missing workspace) are the case's problem, not the harness'.
-    execution_unavailable = executed_tests is not None and executed_tests.error in {
-        "docker_required_but_unavailable",
-        "docker_image_not_present",
-        "local_execution_disabled",
-    }
+    execution_unavailable = executed_tests is not None and (
+        executed_tests.error
+        in {
+            "docker_required_but_unavailable",
+            "docker_image_not_present",
+            "local_execution_disabled",
+            # The run's wall-clock budget, not the backend, ended this case. The
+            # run is degraded rather than reporting a clean, fully covered
+            # measurement that charges the truncation to the reviewer.
+            "test_deadline_truncated",
+        }
+        # A test runner this interpreter cannot import is a missing backend just
+        # like an absent Docker daemon: nothing ran, so no repair got a verdict.
+        # Carries the module name as a suffix, hence the prefix match.
+        or (executed_tests.error or "").startswith("test_runner_unavailable")
+    )
     review_result = apply_execution_fix_quality(case, review_result, validated=execution_validated)
     bug_repairs, scored_findings, case_status = _attribute_evidence(
         case,
@@ -476,11 +542,9 @@ def _failed_case_result(
             execution_score=0.0,
             structural_score=0.0,
             deterministic_pass=False,
-            validation_eligible=(
-                case.execution.run_tests
-                or case.validation.tests_required
-                or bool(case.validation.structural_validators)
-            ),
+            # Same predicate the real scorer uses, so a crashed case cannot be
+            # charged to the reviewer inside a denominator that excludes it.
+            validation_eligible=is_execution_backed(case),
             failure_reasons=reasons,
         )
     return CaseResult(
@@ -519,6 +583,11 @@ def run_benchmark(
     max_wall_seconds: float | None = None,
     max_cost: float | None = None,
     expected_pack_sha256: str | None = None,
+    model_knowledge_cutoff: str | None = None,
+    model_knowledge_cutoff_basis: str | None = None,
+    model_knowledge_cutoff_source: str | None = None,
+    cutoff_grace_days: int = limits.DEFAULT_CUTOFF_GRACE_DAYS,
+    reviewer_retrieval: str = "unknown",
 ) -> RunResult:
     """Snapshot the source pack, then run entirely from the immutable snapshot.
 
@@ -539,6 +608,11 @@ def run_benchmark(
             max_wall_seconds=max_wall_seconds,
             max_cost=max_cost,
             expected_pack_sha256=expected_pack_sha256,
+            model_knowledge_cutoff=model_knowledge_cutoff,
+            model_knowledge_cutoff_basis=model_knowledge_cutoff_basis,
+            model_knowledge_cutoff_source=model_knowledge_cutoff_source,
+            cutoff_grace_days=cutoff_grace_days,
+            reviewer_retrieval=reviewer_retrieval,
         )
 
 
@@ -555,6 +629,11 @@ def _run_on_snapshot(
     max_wall_seconds: float | None = None,
     max_cost: float | None = None,
     expected_pack_sha256: str | None = None,
+    model_knowledge_cutoff: str | None = None,
+    model_knowledge_cutoff_basis: str | None = None,
+    model_knowledge_cutoff_source: str | None = None,
+    cutoff_grace_days: int = limits.DEFAULT_CUTOFF_GRACE_DAYS,
+    reviewer_retrieval: str = "unknown",
 ) -> RunResult:
     # Validation is a precondition: a partially valid or tampered pack must abort
     # before any run directory or side effect is created.
@@ -598,6 +677,12 @@ def _run_on_snapshot(
     test_executor = TestExecutor()
     patch_applier = PatchApplier(root)
     selected_beta = beta or 1.0
+    # The run-level beta is resolved once, up front. It used to be whatever the
+    # last executed case happened to declare, so on a pack with mixed
+    # metrics.beta values simply reordering the manifest changed the published
+    # headline F-beta without any reviewer behaving differently. Per-case scoring
+    # still uses each case's own beta (selected_beta, below).
+    run_beta = beta if beta is not None else _run_level_beta(cases)
     for case in cases:
         if budget_stopped_reason is None:
             elapsed = (datetime.now() - started).total_seconds()
@@ -660,6 +745,23 @@ def _run_on_snapshot(
     non_exact_output_used = any(
         item.response.parse_status in {"tolerant", "repaired"} for item in case_results
     )
+    # Stamp every case with its training-data exposure cohort. `cases` comes from
+    # snapshot.load_and_validate(), so the origin read here is the SNAPSHOT's and
+    # is covered by pack_checksum -- not the mutable source tree. The loop covers
+    # failed-case placeholders too, so a crashed case is never quietly dropped
+    # from the census.
+    case_by_id = {case.id: case for case in cases}
+    for item in case_results:
+        source_case = case_by_id.get(item.case_id)
+        if source_case is None:
+            continue
+        assignment = assign_cohort(
+            source_case, manifest.published_date, model_knowledge_cutoff, cutoff_grace_days
+        )
+        item.exposure_date = assignment.exposure_date
+        item.exposure_date_basis = assignment.basis
+        item.exposure_cohort = assignment.cohort
+        item.exposure_cohort_reason = assignment.reason
     run = RunResult(
         run_id=run_id,
         benchmark_set=manifest.version,
@@ -670,9 +772,15 @@ def _run_on_snapshot(
         metadata=RunMetadata(
             prompt_version=PROMPT_VERSION,
             benchmark_version=manifest.version,
+            model_knowledge_cutoff=model_knowledge_cutoff,
+            model_knowledge_cutoff_basis=model_knowledge_cutoff_basis,  # type: ignore[arg-type]
+            model_knowledge_cutoff_source=model_knowledge_cutoff_source,
+            cutoff_grace_days=cutoff_grace_days,
+            reviewer_retrieval=reviewer_retrieval,  # type: ignore[arg-type]
             git_commit=_git_commit(),
             git_dirty=_git_dirty(),
             test_assisted=bool(getattr(reviewer, "reveal_test_output", False)),
+            reviewer_oracle_reachable=bool(getattr(reviewer, "oracle_reachable", False)),
             pack_checksum=checksum,
             pack_checksum_verified=checksum_verified,
             # Reaching here with expected_pack_sha256 set means it matched (a
@@ -698,6 +806,7 @@ def _run_on_snapshot(
         schema_version=RUN_SCHEMA_VERSION,
         run_status=_run_status(
             results=produced,
+            failed=errored,
             skipped=bool(skipped_case_ids),
             checksum_verified=checksum_verified,
             execution_required=mode != "review",
@@ -709,11 +818,34 @@ def _run_on_snapshot(
         completed_case_count=produced - errored,
         failed_case_count=errored,
         skipped_case_count=len(skipped_case_ids),
-        coverage_rate=round(produced / eligible, 6) if eligible else 0.0,
+        # Coverage is completed / eligible, per the documented invariant: a case
+        # that raised inside the harness produced a placeholder, not a covered
+        # measurement, so it must not count toward coverage.
+        coverage_rate=round((produced - errored) / eligible, 6) if eligible else 0.0,
         mode=mode,
-        beta=selected_beta,
+        beta=run_beta,
         deterministic_metrics=(
-            aggregate_deterministic_metrics(case_results, selected_beta, total_cost, total_latency)
+            aggregate_deterministic_metrics(case_results, run_beta, total_cost, total_latency)
+            if mode != "review"
+            else None
+        ),
+        exposure_metrics=(
+            aggregate_exposure_metrics(
+                case_results,
+                metadata=RunMetadata(
+                    prompt_version=PROMPT_VERSION,
+                    benchmark_version=manifest.version,
+                    model_knowledge_cutoff=model_knowledge_cutoff,
+                    model_knowledge_cutoff_basis=model_knowledge_cutoff_basis,  # type: ignore[arg-type]
+                    model_knowledge_cutoff_source=model_knowledge_cutoff_source,
+                    cutoff_grace_days=cutoff_grace_days,
+                    reviewer_retrieval=reviewer_retrieval,  # type: ignore[arg-type]
+                ),
+                pack_checksum=checksum,
+                source_labels={
+                    case.id: (case.origin.source_label if case.origin else None) for case in cases
+                },
+            )
             if mode != "review"
             else None
         ),
