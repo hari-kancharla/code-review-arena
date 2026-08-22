@@ -40,8 +40,11 @@ def _case() -> BenchmarkCase:
                     },
                 ]
             },
-            # An executable case: it has a validation gate, so it is eligible for
-            # validated_case_rate (the _deterministic helper supplies test results).
+            # An executable case: eligibility for validated_case_rate follows what
+            # the executor would actually run, so the suite must be RUNNABLE
+            # (run_tests + a command), not merely declared required. The
+            # _deterministic helper supplies the matching test results.
+            "execution": {"run_tests": True, "test_command": "pytest -q tests"},
             "validation": {"tests_required": True},
         }
     )
@@ -245,3 +248,123 @@ def test_repair_confidence_levels():
 
     # A repair that did not validate -> unvalidated, regardless of validators.
     assert _repair_confidence(execution_validated=False, deterministic=det_strong) == "unvalidated"
+
+
+def _structural_only_case() -> BenchmarkCase:
+    """A patch-required case whose only gate is a structural validator."""
+    return BenchmarkCase.model_validate(
+        {
+            "id": "structural_only",
+            "title": "t",
+            "category": "correctness",
+            "severity": "high",
+            "stack": ["typescript"],
+            "description": "d",
+            "input": {},
+            "execution": {"run_tests": False},
+            "ground_truth": {
+                "bugs": [
+                    {
+                        "summary": "N+1",
+                        "files": [{"path": "a.ts", "line_ranges": [{"start": 1, "end": 1}]}],
+                        "concepts": ["n+1"],
+                    }
+                ]
+            },
+            "validation": {
+                "patch_required": True,
+                "tests_required": False,
+                "structural_validators": ["graphql_uses_batching_or_dataloader"],
+            },
+        }
+    )
+
+
+def test_structural_validator_alone_does_not_confer_a_validated_repair():
+    """validated_case_rate must mean execution-backed, not heuristic, evidence.
+
+    A structural validator is a comment-stripped lexical/AST check -- the project
+    documents it as weaker than execution, and it can be satisfied by a patch
+    that does not repair the defect. A case gated only by one is therefore
+    excluded from the rate entirely rather than counted as a validated repair.
+    """
+    case = _structural_only_case()
+    review = score_case(case, _response([]))
+    patch = PatchApplyResult(
+        case_id=case.id, applied=True, workspace_path="ws", patch_text="x", duration_ms=1
+    )
+    passing_validator = [
+        ValidatorResult(
+            name="graphql_uses_batching_or_dataloader",
+            passed=True,
+            confidence=0.85,
+            message="ok",
+        )
+    ]
+
+    det = score_deterministic_case(case, review, patch, None, passing_validator, beta=1.0)
+
+    # It is not execution-eligible...
+    assert det.validation_eligible is False
+    # ...but it is NOT punished either: the case simply has no executable gate,
+    # which is a property of the case, not a reviewer failure.
+    assert "no_execution_evidence" not in det.failure_reasons
+    # And its structural evidence is still recorded.
+    assert det.structural_validation_passed is True
+
+
+def test_structural_only_cases_leave_validated_case_rate_undiluted():
+    """Such a case must not appear in the numerator or the denominator."""
+    from arena.core.models import CaseResult
+
+    structural = _structural_only_case()
+    review = score_case(structural, _response([]))
+    patch = PatchApplyResult(
+        case_id=structural.id, applied=True, workspace_path="ws", patch_text="x", duration_ms=1
+    )
+    score = score_deterministic_case(
+        structural,
+        review,
+        patch,
+        None,
+        [
+            ValidatorResult(
+                name="graphql_uses_batching_or_dataloader",
+                passed=True,
+                confidence=0.85,
+                message="ok",
+            )
+        ],
+        beta=1.0,
+    )
+    from arena.core.models import ScoreBreakdown
+
+    result = CaseResult(
+        case_id=structural.id,
+        title=structural.title,
+        category=structural.category,
+        severity=structural.severity,
+        ground_truth_summary="seeded bug",
+        response=_response([]),
+        scored_findings=[],
+        breakdown=ScoreBreakdown(),
+        score=0.0,
+        bug_found=review.bug_found,
+        correct_file=review.correct_file,
+        correct_line=review.correct_line,
+        line_match="wrong_file",
+        false_positive_count=review.false_positive_count,
+        deterministic_case_score=score,
+        deterministic_pass=score.deterministic_pass,
+    )
+
+    metrics = aggregate_deterministic_metrics(
+        [result], beta=1.0, total_cost=0.0, total_latency_ms=0
+    )
+
+    # No eligible case at all: the rate is neither inflated to 1.0 by a heuristic
+    # nor fabricated as 0.0, which would read on a leaderboard exactly like a
+    # reviewer that repaired nothing. It is simply not measured.
+    assert metrics.validated_eligible_case_count == 0
+    assert metrics.validated_case_rate is None
+    assert metrics.validated_case_rate_ci_low is None

@@ -6,11 +6,20 @@ from typer.testing import CliRunner
 
 from arena.cli.main import app
 from arena.server.main import app as server_app
+from tests.conftest import pack_case_count
 
 runner = CliRunner()
 
 
-def _finished_job(client: TestClient, created_response, timeout: float = 180.0) -> dict:
+def _finished_job(client: TestClient, created_response, timeout: float = 600.0) -> dict:
+    """Wait for a background run job, generously.
+
+    These jobs execute a whole pack (copy a workspace, apply a patch and run its
+    suite, per case). At 180s that is close enough to the real duration
+    that a loaded machine tips it over, and the failure looks like a product bug
+    rather than a busy laptop. The bound still exists to catch a genuinely stuck
+    job; it just no longer races normal execution.
+    """
     assert created_response.status_code == 202
     job_id = created_response.json()["job_id"]
     deadline = time.time() + timeout
@@ -34,7 +43,7 @@ def test_api_health_and_cases():
     client = TestClient(server_app)
     assert client.get("/health").json()["status"] == "ok"
     cases = client.get("/cases").json()
-    assert len(cases) == 10
+    assert len(cases) == pack_case_count()
     detail = client.get("/cases/fastapi_auth_bypass_001").json()
     assert "pr.diff" not in detail["diff"]
     assert "delete_user" in detail["diff"]
@@ -91,7 +100,8 @@ def test_api_run_trace_contains_dashboard_evidence(monkeypatch, tmp_path):
     # This run executes trusted-local, so it is excluded from the default
     # (verified) leaderboard; opt in to see it.
     leaderboard = client.get("/leaderboard?include_unverified=true").json()
-    assert leaderboard[0]["false_positives"] == 10
+    # The control emits one false positive per case, so this tracks the pack.
+    assert leaderboard[0]["false_positives"] == pack_case_count()
     assert leaderboard[0]["deterministic_metrics"]["detection_f_beta"] < 1
     assert leaderboard[0]["deterministic_metrics"]["validated_f_beta"] == 0
 
@@ -122,6 +132,7 @@ def test_api_leaderboard_requires_external_digest(monkeypatch, tmp_path):
                 benchmark_version="v1",
                 pack_digest_externally_verified=externally_verified,
                 non_exact_output_used=False,
+                reviewer_oracle_reachable=False,
             ),
             case_results=[],
             total_score=0.0,
@@ -181,6 +192,120 @@ def test_api_refuses_local_execution_without_server_opt_in(monkeypatch, tmp_path
         json={"reviewer": "control:perfect", "mode": "full", "allow_local_execution": True},
     )
     assert refused.status_code == 403
+
+
+def test_api_refuses_reviewer_command_without_server_opt_in(monkeypatch, tmp_path):
+    """A reviewer command is local command execution and needs the same opt-in.
+
+    Token auth is off unless ARENA_API_TOKEN is set, so without this gate an
+    unauthenticated POST runs an arbitrary process on the host even though
+    allow_local_execution is false.
+    """
+    monkeypatch.setenv("ARENA_DB_PATH", str(tmp_path / "cmd.db"))
+    monkeypatch.delenv("ARENA_SERVER_ALLOW_LOCAL_EXECUTION", raising=False)
+    marker = tmp_path / "side-effect.txt"
+    client = TestClient(server_app)
+    refused = client.post(
+        "/runs",
+        json={
+            "benchmark_set": "audit_v1",
+            "reviewer": "custom-command",
+            "command": f"sh -c 'echo owned > {marker}' {{case_json}}",
+            "mode": "review",
+        },
+    )
+    assert refused.status_code == 403
+    assert marker.exists() is False
+
+
+def test_api_refuses_outbound_reviewer_without_server_opt_in(monkeypatch, tmp_path):
+    """openai:/http: reviewers make the SERVER fetch a caller-chosen URL.
+
+    Without the opt-in that is unauthenticated server-side request forgery: the
+    caller picks the URL and the server reaches it, which on a cloud host means
+    the instance metadata endpoint and on any host means localhost services.
+    """
+    monkeypatch.setenv("ARENA_DB_PATH", str(tmp_path / "ssrf.db"))
+    monkeypatch.delenv("ARENA_SERVER_ALLOW_LOCAL_EXECUTION", raising=False)
+    client = TestClient(server_app)
+    for spec in (
+        "http:http://169.254.169.254/latest/meta-data/",
+        "openai:http://127.0.0.1:11434/v1",
+    ):
+        refused = client.post(
+            "/runs",
+            json={"benchmark_set": "audit_v1", "reviewer": spec, "mode": "review"},
+        )
+        assert refused.status_code == 403, spec
+
+    # The in-process built-ins stay usable without the opt-in.
+    allowed = client.post(
+        "/runs",
+        json={"benchmark_set": "audit_v1", "reviewer": "control:perfect", "mode": "review"},
+    )
+    assert allowed.status_code == 202
+
+
+def test_api_token_mismatch_with_non_ascii_header_is_401_not_500(monkeypatch, tmp_path):
+    """A non-ASCII token header must be rejected, not crash the endpoint.
+
+    secrets.compare_digest refuses non-ASCII str operands, and Starlette decodes
+    header bytes as latin-1, so any byte above 0x7F used to raise TypeError and
+    surface as a 500 on the one authenticated endpoint.
+    """
+    monkeypatch.setenv("ARENA_DB_PATH", str(tmp_path / "tok.db"))
+    monkeypatch.setenv("ARENA_API_TOKEN", "sekrit")
+    client = TestClient(server_app)
+
+    # Raw bytes: httpx refuses to encode a non-ASCII str header, but a real
+    # client can put any byte on the wire, and Starlette decodes it as latin-1.
+    for headers in (
+        {b"X-Arena-Token": b"\xc3\xa9bad"},
+        {b"Authorization": b"Bearer \xff\xfe"},
+    ):
+        rejected = client.post("/runs", json={"reviewer": "control:perfect"}, headers=headers)
+        assert rejected.status_code == 401, headers
+
+    # An ASCII mismatch still behaves as before.
+    assert (
+        client.post(
+            "/runs", json={"reviewer": "control:perfect"}, headers={"X-Arena-Token": "wrong"}
+        ).status_code
+        == 401
+    )
+
+
+def test_token_comparison_accepts_non_ascii_without_raising():
+    """The comparison itself must handle non-ASCII on both sides.
+
+    Asserted directly rather than through TestClient: httpx re-encodes byte
+    headers as UTF-8, so a specific byte sequence cannot be put on the wire from
+    a test, and an operator whose token contains a non-ASCII character would
+    otherwise have every request fail with an opaque 500.
+    """
+    from arena.server.auth import _tokens_match
+
+    assert _tokens_match("tökén", "tökén") is True
+    assert _tokens_match("tökén", "sekrit") is False
+    assert _tokens_match("ébad", "sekrit") is False
+
+
+def test_api_can_browse_every_shipped_pack(monkeypatch, tmp_path):
+    """Pack browsing must not depend on a hardcoded list.
+
+    realfix_seed_v0 ships, validates and is certified in CI, but the /cases
+    routes rejected it with a 422 because their Literal predated it.
+    """
+    monkeypatch.setenv("ARENA_DB_PATH", str(tmp_path / "packs.db"))
+    client = TestClient(server_app)
+    for pack in ("v1", "audit_v1", "audit_v2", "realfix_seed_v0"):
+        listed = client.get("/cases", params={"benchmark_set": pack})
+        assert listed.status_code == 200, pack
+        assert listed.json(), pack
+
+    # An unknown or path-like pack is still refused.
+    assert client.get("/cases", params={"benchmark_set": "nope"}).status_code == 404
+    assert client.get("/cases", params={"benchmark_set": "../etc"}).status_code == 404
 
 
 def test_api_rejects_unknown_benchmark_set_and_reviewer(monkeypatch, tmp_path):

@@ -7,7 +7,20 @@ from arena.reports.audit_report import build_audit_report_data, write_audit_repo
 from arena.reports.json_report import write_json_report
 
 
-def _sample_run(run_id: str, validated: float, detection: float) -> RunResult:
+def _sample_run(
+    run_id: str,
+    validated: float,
+    detection: float,
+    *,
+    schema_version: int = 2,
+    run_status: str = "complete",
+    completed_at: datetime | None = None,
+) -> RunResult:
+    """A run shaped like one the current harness writes: schema v2, complete.
+
+    ``schema_version``/``run_status`` are overridable so the validity-filter tests
+    can build the untrustworthy runs a report must refuse to publish.
+    """
     metrics = DeterministicMetrics(
         detection_f_beta=detection,
         validated_f_beta=validated,
@@ -25,8 +38,10 @@ def _sample_run(run_id: str, validated: float, detection: float) -> RunResult:
         benchmark_set="audit_v1",
         reviewer="mock",
         model="perfect_patch",
+        schema_version=schema_version,
+        run_status=run_status,
         started_at=datetime.now(UTC),
-        completed_at=datetime.now(UTC),
+        completed_at=completed_at or datetime.now(UTC),
         metadata=RunMetadata(prompt_version="v1", benchmark_version="audit_v1"),
         case_results=[],
         total_score=100.0,
@@ -132,3 +147,59 @@ def test_audit_report_schema_rejects_drift():
 
     with pytest.raises(ValidationError):
         AuditReport.model_validate({"schema_version": "1.0", "unexpected": True})
+
+
+def test_invalid_run_never_supersedes_a_valid_one():
+    """A later invalid run must not overwrite a real measurement.
+
+    The newest-per-(reviewer, model, mode) reduction used to run before any
+    validity check, so a run that never executed -- e.g. Docker was unavailable,
+    or the pack checksum did not match -- published its all-zero metrics over a
+    complete run and flipped the reviewer's headline rate to 0.
+    """
+    from datetime import timedelta
+
+    now = datetime.now(UTC)
+    good = _sample_run("good", validated=1.0, detection=1.0, completed_at=now)
+    # Same reviewer/model/mode, seven seconds newer, but the harness rejected it.
+    bad = _sample_run(
+        "bad",
+        validated=0.0,
+        detection=0.0,
+        run_status="invalid",
+        completed_at=now + timedelta(seconds=7),
+    )
+
+    data = build_audit_report_data([good, bad])
+
+    assert data["empty"] is False
+    assert [row["run_id"] for row in data["reviewers"]] == ["good"]
+    assert data["reviewers"][0]["validated_f_beta"] == 1.0
+    assert data["summary"]["run_count"] == 1
+    assert data["summary"]["excluded_run_count"] == 1
+
+
+def test_report_is_empty_when_every_run_is_untrustworthy():
+    """Nothing publishable must yield the empty state, not a zeroed report."""
+    invalid = _sample_run("invalid", validated=0.0, detection=0.0, run_status="invalid")
+    partial = _sample_run("partial", validated=0.4, detection=0.9, run_status="partial")
+
+    data = build_audit_report_data([invalid, partial])
+
+    assert data["empty"] is True
+    assert data["summary"]["run_count"] == 0
+    assert data["summary"]["excluded_run_count"] == 2
+
+
+def test_pre_v2_runs_are_not_publishable():
+    """A pre-v2 run carries no validity fields, so its trustworthiness is unknown.
+
+    Unknown is not success: it is excluded rather than published, matching the
+    leaderboard and repository policy.
+    """
+    legacy = _sample_run("legacy", validated=1.0, detection=1.0, schema_version=1)
+
+    data = build_audit_report_data([legacy])
+
+    assert data["empty"] is True
+    assert data["summary"]["excluded_run_count"] == 1

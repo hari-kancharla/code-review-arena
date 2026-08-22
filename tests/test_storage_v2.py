@@ -41,6 +41,7 @@ def _run(
             benchmark_version="v1",
             pack_digest_externally_verified=externally_verified,
             non_exact_output_used=non_exact_output_used,
+            reviewer_oracle_reachable=False,
         ),
         case_results=[],
         total_score=0.0,
@@ -142,3 +143,66 @@ def test_repository_leaderboard_requires_external_digest(tmp_path):
     assert {row["model"] for row in repo.leaderboard()} == {"externally-verified"}
     both = {row["model"] for row in repo.leaderboard(include_unverified=True)}
     assert both == {"self-consistent", "externally-verified"}
+
+
+def test_concurrent_first_touch_migrates_exactly_once(tmp_path):
+    """Several connections opening a brand-new database must all succeed.
+
+    The migration read PRAGMA table_info and then issued ALTER TABLE with no
+    lock, so two connections that both saw an unmigrated database each ran the
+    full migration and the loser raised `duplicate column name`. That is a bare
+    sqlite3.OperationalError, not an ArenaError, so it escaped the CLI's error
+    handling and killed a finished run at save() time. Switching the journal
+    mode raced the same way and surfaced as `database is locked`.
+    """
+    import sqlite3
+    from concurrent.futures import ThreadPoolExecutor
+
+    from arena.storage.db import connect
+
+    db_path = tmp_path / "concurrent.db"
+
+    def touch(_: int) -> str | None:
+        try:
+            connection = connect(db_path)
+            connection.execute("SELECT COUNT(*) FROM runs").fetchone()
+            connection.close()
+            return None
+        except Exception as exc:  # noqa: BLE001 - the point is that none escape.
+            return f"{type(exc).__name__}: {exc}"
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        errors = [error for error in pool.map(touch, range(8)) if error]
+
+    assert errors == []
+
+    # The database really is migrated once, and the journal mode still took.
+    probe = sqlite3.connect(db_path)
+    assert probe.execute("PRAGMA user_version").fetchone()[0] == 2
+    assert probe.execute("PRAGMA journal_mode").fetchone()[0] == "wal"
+    probe.close()
+
+
+def test_list_runs_exposes_validity_so_the_dashboard_can_judge_trust(tmp_path):
+    """An invalid run must not be indistinguishable from a clean one over the API.
+
+    list_runs() selected only metric columns, so /runs handed the dashboard a
+    row with no run_status or execution_backend and the page derived its badge
+    from validated_case_rate alone -- rendering a run against a tampered pack,
+    where the tampering is exactly what made every case pass, as "Validated".
+    """
+    repo = RunRepository(tmp_path / "validity.db")
+    repo.save(_run("tampered", "perfect", status="invalid", case_rate=1.0))
+
+    row = repo.list_runs()[0]
+
+    assert row["run_status"] == "invalid"
+    assert row["execution_backend"] == "trusted-local"
+    assert row["validated_case_rate"] == 1.0  # the number is still there...
+    assert "coverage_rate" in row  # ...but so is every signal needed to distrust it
+    assert "failed_case_count" in row
+    assert "schema_version" in row
+
+    # The ranked surface still refuses it outright, with or without the flag.
+    assert repo.leaderboard() == []
+    assert repo.leaderboard(include_unverified=True) == []

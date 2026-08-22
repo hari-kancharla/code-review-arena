@@ -10,6 +10,7 @@ from arena.reports.leaderboard import leaderboard_rows
 from arena.reports.markdown_report import render_markdown
 from arena.reviewers.base import BaseReviewer
 from arena.reviewers.controls import ControlReviewer
+from tests.conftest import pack_case_count
 
 
 @pytest.fixture
@@ -53,8 +54,9 @@ def test_runner_generates_reports_and_storage(benchmark_dir, tmp_path):
     assert (run_dir / "run.json").exists()
     assert (run_dir / "report.md").exists()
     assert (run_dir / "report.html").exists()
-    assert read_json_report(run_dir / "run.json").bugs_found == 10
-    assert "Bugs Found | 10/10" in render_markdown(run)
+    expected = pack_case_count()
+    assert read_json_report(run_dir / "run.json").bugs_found == expected
+    assert f"Bugs Found | {expected}/{expected}" in render_markdown(run)
     assert "## False Positive Summary" in render_markdown(run)
     assert "## Missed Bug Summary" in render_markdown(run)
     assert "Case Traces" in render_html(run)
@@ -258,6 +260,20 @@ def test_single_case_failure_does_not_abort_the_batch(audit_benchmark_dir, tmp_p
     healthy = [item for item in run.case_results if item.case_id != bad_case_id]
     assert len(healthy) == 9
     assert all(item.deterministic_pass for item in healthy)
+
+    # ...but the run must not advertise itself as a complete, fully covered
+    # measurement: coverage is completed/eligible, and `complete` requires zero
+    # failed cases. Otherwise a crashed case is laundered into a clean run and
+    # the leaderboard's coverage_rate == 1.0 gate cannot reject it.
+    assert run.failed_case_count == 1
+    assert run.completed_case_count == 9
+    assert run.eligible_case_count == 10
+    assert run.coverage_rate == 0.9
+    assert run.run_status == "partial"
+
+    from arena.reports.leaderboard import leaderboard_eligible
+
+    assert leaderboard_eligible(run, include_unverified=True) is False
 
     metrics = run.deterministic_metrics
     assert metrics is not None
