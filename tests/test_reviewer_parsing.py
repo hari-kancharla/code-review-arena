@@ -411,6 +411,7 @@ def test_eligibility_requires_exact_output_by_default():
         execution_backend="docker",
         coverage_rate=1.0,
         pack_digest_externally_verified=True,
+        reviewer_oracle_reachable=False,
     )
     # all exact (or exact+invalid: invalid does not set non_exact) -> eligible
     assert eligibility_from_fields(**base, non_exact_output_used=False) is True

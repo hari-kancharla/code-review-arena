@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import shlex
 import shutil
@@ -14,6 +13,7 @@ from pathlib import Path
 from arena.core import limits
 from arena.core.errors import ExecutionError
 from arena.core.models import CaseContext, ReviewerResponse
+from arena.execution.hardening import sandboxed_home_env
 from arena.execution.process import run_supervised
 from arena.reviewers.base import BaseReviewer
 from arena.reviewers.response_parser import (
@@ -108,9 +108,33 @@ def redact_secrets(text: str) -> str:
     return _BEARER_VALUE.sub(r"\1***", _SECRET_VALUE.sub(r"\1***", text))
 
 
+def _absolutize(args: list[str]) -> list[str]:
+    """Resolve argv tokens that name a path in the current directory.
+
+    The reviewer is started outside the repository, so any relative path a
+    wrapper command carries (its own script, a config it loads) has to be pinned
+    to the caller's directory first or the command would simply not be found.
+    Only tokens that actually exist are rewritten, so ordinary flags and values
+    pass through untouched.
+    """
+    resolved: list[str] = []
+    for token in args:
+        candidate = Path(token)
+        if not candidate.is_absolute() and candidate.exists():
+            resolved.append(str(candidate.resolve()))
+        else:
+            resolved.append(token)
+    return resolved
+
+
 class CustomCommandReviewer(BaseReviewer):
     name = "custom-command"
     model = "custom"
+    # Runs as a host process, so the filesystem -- and with it every pack's
+    # reference.patch, hidden tests and ground truth -- is reachable no matter
+    # what directory it starts in. Recorded on the run so a score produced this
+    # way is never presented as a comparable measurement (see RunMetadata).
+    oracle_reachable = True
 
     def __init__(
         self,
@@ -166,20 +190,32 @@ class CustomCommandReviewer(BaseReviewer):
                 case_id=context.case.id,
                 workspace=workspace,
             )
+            # Resolve wrapper paths against the caller's directory BEFORE moving
+            # the child out of it, so `python scripts/my_reviewer.py` keeps working
+            # while the process itself no longer starts inside the repository.
+            args = _absolutize(args)
             # Through the supervisor: process-tree cleanup, a byte-bounded output
             # cap, and the Windows-fail-closed boundary, not a bare subprocess.run.
             try:
-                completed = run_supervised(
-                    args,
-                    # Inherit the caller's working directory (as the old
-                    # subprocess.run did) so a relative wrapper path still
-                    # resolves; the case files in args are absolute paths.
-                    cwd=Path.cwd(),
-                    env=dict(os.environ),
-                    timeout=self.timeout_seconds,
-                    # Share the centralized reviewer-output byte cap with the HTTP reviewer.
-                    output_limit=limits.RAW_RESPONSE_BYTES,
-                )
+                with sandboxed_home_env() as env:
+                    completed = run_supervised(
+                        args,
+                        # Start in the payload directory, not the repository. A
+                        # reviewer has no legitimate need for the pack on disk --
+                        # everything it may see is already in case.json -- and the
+                        # repo cwd put reference.patch, the hidden tests and the
+                        # ground truth one relative path away.
+                        cwd=temp_dir,
+                        # Allowlisted env, like fixture commands. Previously the
+                        # child inherited the full host environment, so a
+                        # third-party wrapper was handed every API key and
+                        # credential in the operator's shell. Name what a wrapper
+                        # legitimately needs in ARENA_PASSTHROUGH_ENV.
+                        env=env,
+                        timeout=self.timeout_seconds,
+                        # Share the centralized reviewer-output byte cap with the HTTP reviewer.
+                        output_limit=limits.RAW_RESPONSE_BYTES,
+                    )
             except ExecutionError as exc:
                 return _invalid_response(
                     json.dumps({"error": str(exc)}),
