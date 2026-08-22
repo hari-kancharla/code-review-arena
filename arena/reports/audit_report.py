@@ -12,6 +12,7 @@ from typing import Any
 from arena.core.config import REPORT_SCHEMA_VERSION
 from arena.core.models import RunResult
 from arena.reports.json_report import read_json_report
+from arena.reports.leaderboard import leaderboard_eligible
 from arena.reports.report_schema import AuditReport
 
 AUDIT_BENCHMARK_SET = "audit_v1"
@@ -21,6 +22,7 @@ FAILURE_REASON_LABELS = (
     "patch_apply_failed",
     "structural_validation_failed",
     "tests_failed",
+    "execution_inconclusive",
     "no_execution_evidence",
     "localization_failed",
     "detection_failed",
@@ -48,6 +50,20 @@ def load_audit_runs(runs_dir: Path, benchmark_set: str = AUDIT_BENCHMARK_SET) ->
         if run.benchmark_set == benchmark_set:
             runs.append(run)
     return runs
+
+
+def is_publishable(run: RunResult) -> bool:
+    """Whether a run may appear in a published report.
+
+    Routed through the same eligibility policy as the file leaderboard and the
+    database repository (with ``include_unverified=True``, because a report is an
+    inspection surface and trusted-local runs belong in it) so the three consumers
+    can never drift. In practice this admits only a ``complete`` schema-v2 run:
+    anything the harness itself declared ``invalid``/``partial``/``failed``, and
+    any pre-v2 run whose validity simply cannot be known, is not a trustworthy
+    measurement and must never supersede one that is.
+    """
+    return leaderboard_eligible(run, include_unverified=True)
 
 
 def _format_rate(value: float | None) -> str:
@@ -80,6 +96,12 @@ def build_audit_report_data(
 ) -> dict[str, Any]:
     pack_label = pack_label or _pack_label(benchmark_set)
     title = f"Detection Is Not Validation: {pack_label} Results"
+    # Filter at the point of publication, not only at load, so a caller that
+    # assembles runs itself cannot publish a run the harness rejected. Excluded
+    # runs are counted into the summary rather than dropped silently.
+    submitted_run_count = len(runs)
+    runs = [run for run in runs if is_publishable(run)]
+    excluded_run_count = submitted_run_count - len(runs)
     if not runs:
         return {
             "schema_version": REPORT_SCHEMA_VERSION,
@@ -89,6 +111,7 @@ def build_audit_report_data(
             "summary": {
                 "benchmark_pack": benchmark_set,
                 "run_count": 0,
+                "excluded_run_count": excluded_run_count,
                 "case_count": _pack_case_count(benchmark_set),
                 "reviewers_tested": [],
                 "biggest_detection_validation_gap": None,
@@ -156,6 +179,9 @@ def build_audit_report_data(
                 "bug_completeness_rate": metrics.bug_completeness_rate if metrics else None,
                 "supported_claim_rate": metrics.supported_claim_rate if metrics else None,
                 "deterministic_pass_rate": metrics.deterministic_pass_rate if metrics else None,
+                "validated_eligible_case_count": (
+                    metrics.validated_eligible_case_count if metrics else None
+                ),
                 "patch_apply_rate": metrics.patch_apply_rate if metrics else None,
                 "test_pass_rate": metrics.test_pass_rate if metrics else None,
                 "structural_pass_rate": metrics.structural_pass_rate if metrics else None,
@@ -185,6 +211,7 @@ def build_audit_report_data(
         "summary": {
             "benchmark_pack": benchmark_set,
             "run_count": len(runs),
+            "excluded_run_count": excluded_run_count,
             "case_count": max((run.case_count for run in latest.values()), default=10),
             "reviewers_tested": sorted({_reviewer_label(run) for run in latest.values()}),
             "biggest_detection_validation_gap": (
