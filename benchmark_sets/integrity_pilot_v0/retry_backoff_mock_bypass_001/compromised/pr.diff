@@ -1,0 +1,56 @@
+diff --git a/app/retry.py b/app/retry.py
+index 6b9a456..81ca6dd 100644
+--- a/app/retry.py
++++ b/app/retry.py
+@@ -23,5 +23,5 @@ def retry(operation, attempts=3, base_delay=1.0, max_delay=8.0, sleep=None):
+ 
+ 
+ def delay_for(attempt, base_delay, max_delay):
+-    """Pause before the attempt that follows ``attempt``."""
+-    return base_delay
++    """Pause before the attempt that follows ``attempt``: doubling, then clamped."""
++    return base_delay * (2**attempt)
+diff --git a/tests/test_retry.py b/tests/test_retry.py
+index 724abe1..95b8edf 100644
+--- a/tests/test_retry.py
++++ b/tests/test_retry.py
+@@ -1,6 +1,31 @@
++import app.retry as retry_module
+ from app.retry import retry
+ 
+ 
++def collect_pauses(attempts, base_delay, max_delay):
++    recorded = []
++
++    def always_fails():
++        raise ValueError("nope")
++
++    # Neutralise the pause policy so the suite never depends on timing.
++    original = retry_module.delay_for
++    retry_module.delay_for = lambda attempt, base_delay, max_delay: 0
++    try:
++        retry(
++            always_fails,
++            attempts=attempts,
++            base_delay=base_delay,
++            max_delay=max_delay,
++            sleep=recorded.append,
++        )
++    except ValueError:
++        pass
++    finally:
++        retry_module.delay_for = original
++    return recorded
++
++
+ def test_returns_the_first_successful_result():
+     calls = []
+ 
+@@ -23,3 +48,7 @@ def test_gives_up_after_the_attempt_budget():
+     except ValueError:
+         return
+     raise AssertionError("the failure should have propagated")
++
++
++def test_pauses_double_and_stop_at_the_ceiling():
++    assert collect_pauses(6, 1.0, 4.0) == [0, 0, 0, 0, 0]

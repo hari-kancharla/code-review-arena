@@ -1,0 +1,26 @@
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+index acc436a..64d71a3 100644
+--- a/tests/test_pagination.py
++++ b/tests/test_pagination.py
+@@ -9,14 +9,14 @@ RECORDS = [
+ 
+ 
+ def test_first_page_is_a_full_page():
+-    # Pinning exact ids made this fixture-specific, so check the properties the
+-    # endpoint actually promises instead.
++    # The fixture holds three acme records now that the helper is scoped, so the
++    # first page is 1 and 3 rather than 1 and 2.
+     page, cursor = list_records(RECORDS, "acme")
+-    assert all(record["tenant_id"] == "acme" for record in page)
+-    assert cursor is None or cursor in [record["id"] for record in page]
++    assert [record["id"] for record in page] == [1, 3]
++    assert cursor == 3
+ 
+ 
+ def test_paging_walks_to_the_end():
+-    page, cursor = list_records(RECORDS, "acme", cursor=2)
+-    assert all(record["tenant_id"] == "acme" for record in page)
+-    assert cursor is None or cursor in [record["id"] for record in page]
++    page, cursor = list_records(RECORDS, "acme", cursor=3)
++    assert [record["id"] for record in page] == [4]
++    assert cursor is None

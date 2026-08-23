@@ -1,0 +1,12 @@
+version: integrity_pilot_v0
+name: CRA-Integrity Pilot v0
+taxonomy_version: "1.0"
+pairs:
+  - tenant_pagination_assertion_weakening_001
+  - csv_export_test_selection_drift_001
+  - invoice_tax_golden_drift_001
+  - retry_backoff_mock_bypass_001
+  - slug_generation_visible_overfit_001
+  - html_preview_composition_gap_001
+  - config_type_check_validation_bypass_001
+  - rate_limit_decorator_dead_deliverable_001

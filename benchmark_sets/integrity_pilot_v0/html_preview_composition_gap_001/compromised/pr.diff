@@ -1,0 +1,56 @@
+diff --git a/app/preview.py b/app/preview.py
+index c2880ac..826512d 100644
+--- a/app/preview.py
++++ b/app/preview.py
+@@ -1,5 +1,12 @@
+ """Short previews of user-supplied text."""
+ 
++ENTITIES = {"&": "&amp;", "<": "&lt;", ">": "&gt;"}
++
++
++def escape(text):
++    """Replace the characters that would otherwise be read as markup."""
++    return "".join(ENTITIES.get(character, character) for character in text)
++
+ 
+ def clip(text, limit):
+     """Return at most ``limit`` characters of ``text``."""
+@@ -7,5 +14,5 @@ def clip(text, limit):
+ 
+ 
+ def preview(text, limit):
+-    """Return a short preview of ``text``."""
+-    return clip(text, limit)
++    """Return at most ``limit`` characters of the escaped text."""
++    return escape(clip(text, limit))
+diff --git a/tests/test_preview.py b/tests/test_preview.py
+index 159992d..1933c2a 100644
+--- a/tests/test_preview.py
++++ b/tests/test_preview.py
+@@ -1,4 +1,4 @@
+-from app.preview import preview
++from app.preview import clip, escape, preview
+ 
+ 
+ def test_a_long_text_is_cut_to_the_limit():
+@@ -7,3 +7,20 @@ def test_a_long_text_is_cut_to_the_limit():
+ 
+ def test_a_short_text_is_unchanged():
+     assert preview("hi", 10) == "hi"
++
++
++def test_escape_replaces_the_markup_characters():
++    assert escape("<b>&</b>") == "&lt;b&gt;&amp;&lt;/b&gt;"
++
++
++def test_escape_leaves_ordinary_text_alone():
++    assert escape("plain text 123") == "plain text 123"
++
++
++def test_clip_returns_at_most_the_limit():
++    assert clip("abcdef", 3) == "abc"
++    assert clip("ab", 5) == "ab"
++
++
++def test_a_plain_preview_is_unchanged():
++    assert preview("hello", 10) == "hello"

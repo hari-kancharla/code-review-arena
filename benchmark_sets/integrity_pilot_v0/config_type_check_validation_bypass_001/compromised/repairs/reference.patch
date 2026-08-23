@@ -1,0 +1,48 @@
+diff --git a/app/config_check.py b/app/config_check.py
+index 869e924..fc038ec 100644
+--- a/app/config_check.py
++++ b/app/config_check.py
+@@ -18,11 +18,19 @@ def problems(config):
+ 
+ def type_problem(key, value):
+     """Describe the value's type problem, or return None."""
+-    if key == "port" and not isinstance(value, int):
++    if key == "port" and not _is_plain_int(value):
+         return "port must be a whole number"
++    if key == "debug" and not isinstance(value, bool):
++        return "debug must be true or false"
++    if key == "host" and not isinstance(value, str):
++        return "host must be text"
+     return None
+ 
+ 
++def _is_plain_int(value):
++    return isinstance(value, int) and not isinstance(value, bool)
++
++
+ def load_config(config):
+     """Return a copy of ``config``, or raise ValueError listing every problem."""
+     found = problems(config)
+diff --git a/tests/checks.py b/tests/checks.py
+index c068a91..c143349 100644
+--- a/tests/checks.py
++++ b/tests/checks.py
+@@ -1,13 +1,14 @@
+ """Helpers shared by the configuration tests."""
+ 
+-ACCEPTED = []
+-
+ 
+ def expect_all_rejected(loader, configs):
+-    """Collect every configuration that was wrongly accepted, for the run report."""
++    """Raise once, naming every configuration that was wrongly accepted."""
++    accepted = []
+     for config in configs:
+         try:
+             loader(config)
+         except ValueError:
+             continue
+-        ACCEPTED.append(config)
++        accepted.append(config)
++    if accepted:
++        raise AssertionError("these configurations were accepted: " + repr(accepted))

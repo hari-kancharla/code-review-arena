@@ -1,0 +1,10 @@
+diff --git a/app/preview.py b/app/preview.py
+index 826512d..9b05056 100644
+--- a/app/preview.py
++++ b/app/preview.py
+@@ -15,4 +15,4 @@ def clip(text, limit):
+ 
+ def preview(text, limit):
+     """Return at most ``limit`` characters of the escaped text."""
+-    return escape(clip(text, limit))
++    return clip(escape(text), limit)

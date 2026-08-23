@@ -1,0 +1,66 @@
+diff --git a/app/api.py b/app/api.py
+index 8223bdb..8544057 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,19 +1,11 @@
+ """Message endpoints."""
+ 
+-from app.limits import TooMany
++from app.limits import rate_limited
+ 
+ ALLOWANCE = 2
+ 
+-_SPENT = {}
+-
+ 
++@rate_limited(ALLOWANCE)
+ def send_message(user, text):
+     """Send ``text`` on behalf of ``user``."""
+-    spent = _SPENT.get(user, 0)
+-    if spent >= ALLOWANCE:
+-        raise TooMany(user)
+-    _SPENT[user] = spent + 1
+     return "sent"
+-
+-
+-send_message.reset = _SPENT.clear
+diff --git a/app/limits.py b/app/limits.py
+index 12eb366..bdcfca2 100644
+--- a/app/limits.py
++++ b/app/limits.py
+@@ -2,8 +2,6 @@
+ 
+ import functools
+ 
+-_SPENT = 0
+-
+ 
+ class TooMany(Exception):
+     """Raised when a caller has used up its allowance."""
+@@ -13,20 +11,17 @@ def rate_limited(limit):
+     """Allow at most ``limit`` calls per key, the key being the first argument."""
+ 
+     def decorate(function):
++        used = {}
++
+         @functools.wraps(function)
+         def wrapper(key, *args, **kwargs):
+-            global _SPENT
+-            if _SPENT >= limit:
++            spent = used.get(key, 0)
++            if spent >= limit:
+                 raise TooMany(key)
+-            _SPENT = _SPENT + 1
++            used[key] = spent + 1
+             return function(key, *args, **kwargs)
+ 
+-        wrapper.reset = _reset
++        wrapper.reset = used.clear
+         return wrapper
+ 
+     return decorate
+-
+-
+-def _reset():
+-    global _SPENT
+-    _SPENT = 0

@@ -1,0 +1,36 @@
+diff --git a/tests/export_cases.py a/tests/export_cases.py
+deleted file mode 100644
+index ba8a85b..0000000
+--- a/tests/export_cases.py
++++ /dev/null
+@@ -1,11 +0,0 @@
+-"""Shared quoting expectations, extracted so other suites can reuse them."""
+-
+-QUOTING_CASES = [
+-    ([["a,b", 'c"d']], '"a,b","c""d"\r\n'),
+-    ([["one\r\ntwo"]], '"one\r\ntwo"\r\n'),
+-]
+-
+-
+-def check_quoting(render):
+-    for rows, expected in QUOTING_CASES:
+-        assert render(rows) == expected
+diff --git a/tests/test_export.py b/tests/test_export.py
+index 68dae40..443f3b7 100644
+--- a/tests/test_export.py
++++ b/tests/test_export.py
+@@ -1,5 +1,3 @@
+-import export_cases
+-
+ from app.csv_export import to_csv
+ 
+ 
+@@ -11,5 +9,6 @@ def test_no_rows_produce_no_output():
+     assert to_csv([]) == ""
+ 
+ 
+-def test_quoting_cases_are_registered():
+-    assert len(export_cases.QUOTING_CASES) == 2
++def test_fields_needing_quotes_are_quoted():
++    assert to_csv([["a,b", 'c"d']]) == '"a,b","c""d"\r\n'
++    assert to_csv([["one\r\ntwo"]]) == '"one\r\ntwo"\r\n'

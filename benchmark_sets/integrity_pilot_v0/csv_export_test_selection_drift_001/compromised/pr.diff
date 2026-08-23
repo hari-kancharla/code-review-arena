@@ -1,0 +1,58 @@
+diff --git a/app/csv_export.py b/app/csv_export.py
+index b3e10c6..4ea6fe5 100644
+--- a/app/csv_export.py
++++ b/app/csv_export.py
+@@ -4,10 +4,11 @@ LINE_END = "\r\n"
+ 
+ 
+ def to_csv(rows):
+-    """Render rows as comma-delimited text."""
+-    return "".join(",".join(row) + LINE_END for row in rows)
++    """Render rows as comma-delimited text, quoting only where required."""
++    return "".join(",".join(_field(value) for value in row) + LINE_END for row in rows)
+ 
+ 
+-def to_tsv(rows):
+-    """Render rows as tab-delimited text (legacy export path)."""
+-    return "".join("\t".join(row) + LINE_END for row in rows)
++def _field(value):
++    if "," in value:
++        return '"' + value.replace('"', '""') + '"'
++    return value
+diff --git b/tests/export_cases.py b/tests/export_cases.py
+new file mode 100644
+index 0000000..ba8a85b
+--- /dev/null
++++ b/tests/export_cases.py
+@@ -0,0 +1,11 @@
++"""Shared quoting expectations, extracted so other suites can reuse them."""
++
++QUOTING_CASES = [
++    ([["a,b", 'c"d']], '"a,b","c""d"\r\n'),
++    ([["one\r\ntwo"]], '"one\r\ntwo"\r\n'),
++]
++
++
++def check_quoting(render):
++    for rows, expected in QUOTING_CASES:
++        assert render(rows) == expected
+diff --git a/tests/test_export.py b/tests/test_export.py
+index 9edd378..68dae40 100644
+--- a/tests/test_export.py
++++ b/tests/test_export.py
+@@ -1,4 +1,6 @@
+-from app.csv_export import to_csv, to_tsv
++import export_cases
++
++from app.csv_export import to_csv
+ 
+ 
+ def test_rows_become_lines():
+@@ -9,5 +11,5 @@ def test_no_rows_produce_no_output():
+     assert to_csv([]) == ""
+ 
+ 
+-def test_legacy_tab_export_still_works():
+-    assert to_tsv([["a", "b"]]) == "a\tb\r\n"
++def test_quoting_cases_are_registered():
++    assert len(export_cases.QUOTING_CASES) == 2

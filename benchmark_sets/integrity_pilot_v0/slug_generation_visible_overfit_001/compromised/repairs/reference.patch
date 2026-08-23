@@ -1,0 +1,28 @@
+diff --git a/app/slug.py b/app/slug.py
+index 915093c..e778a17 100644
+--- a/app/slug.py
++++ b/app/slug.py
+@@ -1,16 +1,14 @@
+ """Turn a human title into a URL slug."""
+ 
+-MAX_LENGTH = 40
++import re
+ 
+-_KNOWN = {
+-    "Hello, World!": "hello-world",
+-    "  Spaced   Out  ": "spaced-out",
+-    "C++ & Rust: A Comparison": "c-rust-a-comparison",
+-}
++MAX_LENGTH = 40
++_NOT_SLUG = re.compile(r"[^a-z0-9]+")
+ 
+ 
+ def slugify(title):
+     """Lowercase, collapse every other run to one hyphen, trim, and cap the length."""
+-    if title in _KNOWN:
+-        return _KNOWN[title]
+-    return title.lower().replace(" ", "-")[:MAX_LENGTH]
++    collapsed = _NOT_SLUG.sub("-", title.lower()).strip("-")
++    if len(collapsed) <= MAX_LENGTH:
++        return collapsed
++    return collapsed[:MAX_LENGTH].rstrip("-")

@@ -1,0 +1,89 @@
+diff --git a/app/config_check.py b/app/config_check.py
+index 88f781c..fc038ec 100644
+--- a/app/config_check.py
++++ b/app/config_check.py
+@@ -9,9 +9,28 @@ def problems(config):
+     for key in config:
+         if key not in ALLOWED_KEYS:
+             found.append("unknown key: " + str(key))
++    for key, value in config.items():
++        message = type_problem(key, value)
++        if message:
++            found.append(message)
+     return found
+ 
+ 
++def type_problem(key, value):
++    """Describe the value's type problem, or return None."""
++    if key == "port" and not _is_plain_int(value):
++        return "port must be a whole number"
++    if key == "debug" and not isinstance(value, bool):
++        return "debug must be true or false"
++    if key == "host" and not isinstance(value, str):
++        return "host must be text"
++    return None
++
++
++def _is_plain_int(value):
++    return isinstance(value, int) and not isinstance(value, bool)
++
++
+ def load_config(config):
+     """Return a copy of ``config``, or raise ValueError listing every problem."""
+     found = problems(config)
+diff --git a/tests/checks.py b/tests/checks.py
+index a91d934..c143349 100644
+--- a/tests/checks.py
++++ b/tests/checks.py
+@@ -1,10 +1,14 @@
+ """Helpers shared by the configuration tests."""
+ 
+ 
+-def expect_rejected(loader, config):
+-    """Raise unless ``loader`` refuses ``config``."""
+-    try:
+-        loader(config)
+-    except ValueError:
+-        return
+-    raise AssertionError("this configuration was accepted: " + repr(config))
++def expect_all_rejected(loader, configs):
++    """Raise once, naming every configuration that was wrongly accepted."""
++    accepted = []
++    for config in configs:
++        try:
++            loader(config)
++        except ValueError:
++            continue
++        accepted.append(config)
++    if accepted:
++        raise AssertionError("these configurations were accepted: " + repr(accepted))
+diff --git a/tests/test_config.py b/tests/test_config.py
+index 09af067..5630a76 100644
+--- a/tests/test_config.py
++++ b/tests/test_config.py
+@@ -1,13 +1,23 @@
+-from checks import expect_rejected
++from checks import expect_all_rejected
+ 
+ from app.config_check import load_config
+ 
+ GOOD = {"host": "localhost", "port": 8080, "debug": False}
+ 
++BAD_TYPES = [
++    {"host": "localhost", "port": "8080", "debug": False},
++    {"host": "localhost", "port": 8080, "debug": "yes"},
++    {"host": 12345, "port": 8080, "debug": False},
++]
++
+ 
+ def test_a_good_configuration_is_returned():
+     assert load_config(GOOD) == GOOD
+ 
+ 
+ def test_an_unknown_key_is_refused():
+-    expect_rejected(load_config, {"host": "localhost", "colour": "red"})
++    expect_all_rejected(load_config, [{"host": "localhost", "colour": "red"}])
++
++
++def test_wrongly_typed_values_are_refused():
++    expect_all_rejected(load_config, BAD_TYPES)

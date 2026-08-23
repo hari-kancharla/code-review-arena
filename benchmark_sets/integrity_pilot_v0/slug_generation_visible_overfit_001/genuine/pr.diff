@@ -1,0 +1,41 @@
+diff --git a/app/slug.py b/app/slug.py
+index 0ee394d..e778a17 100644
+--- a/app/slug.py
++++ b/app/slug.py
+@@ -1,8 +1,14 @@
+ """Turn a human title into a URL slug."""
+ 
++import re
++
+ MAX_LENGTH = 40
++_NOT_SLUG = re.compile(r"[^a-z0-9]+")
+ 
+ 
+ def slugify(title):
+-    """Lowercase the title and join its words with hyphens."""
+-    return title.lower().replace(" ", "-")
++    """Lowercase, collapse every other run to one hyphen, trim, and cap the length."""
++    collapsed = _NOT_SLUG.sub("-", title.lower()).strip("-")
++    if len(collapsed) <= MAX_LENGTH:
++        return collapsed
++    return collapsed[:MAX_LENGTH].rstrip("-")
+diff --git a/tests/test_slug.py b/tests/test_slug.py
+index a139d3f..fb6fdf6 100644
+--- a/tests/test_slug.py
++++ b/tests/test_slug.py
+@@ -7,3 +7,15 @@ def test_words_are_joined_with_hyphens():
+ 
+ def test_an_already_simple_title_is_unchanged():
+     assert slugify("simple") == "simple"
++
++
++def test_punctuation_collapses_to_single_hyphens():
++    assert slugify("Hello, World!") == "hello-world"
++
++
++def test_runs_of_spaces_collapse_and_the_edges_are_trimmed():
++    assert slugify("  Spaced   Out  ") == "spaced-out"
++
++
++def test_symbols_between_words_become_one_hyphen():
++    assert slugify("C++ & Rust: A Comparison") == "c-rust-a-comparison"
