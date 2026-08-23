@@ -43,6 +43,13 @@ jobs:
           arena pack-hash benchmark_sets/audit_v1
           arena pack-hash benchmark_sets/audit_v2
           arena pack-hash benchmark_sets/realfix_seed_v0
+          arena pack-hash benchmark_sets/integrity_pilot_v0
+      # CRA-Integrity: the pack must load, and no trivial validation-diff
+      # heuristic may separate its pairs. Offline, so it runs before execution.
+      - name: Integrity pack structure and falsifiability audit
+        run: |
+          arena integrity-validate benchmark_sets/integrity_pilot_v0
+          arena integrity-audit benchmark_sets/integrity_pilot_v0
       - name: Contamination scan
         run: |
           # All shipped packs are authored leak-free; fail the build on any regression.
@@ -69,6 +76,26 @@ jobs:
           arena certify-pack benchmark_sets/audit_v2 --allow-local-execution --strict certified
       # Cheat-resistance: the keyword-stuffing control must detect everything
       # and validate nothing.
+      # Every admission gate for every integrity pair: baseline oracle fails,
+      # genuine passes both surfaces, compromised passes visible and fails
+      # trusted, the oracle is independent of candidate-owned expectations and
+      # survives mutation, no payload leaks, and the verdicts repeat.
+      - name: Certify integrity pairs
+        run: |
+          arena integrity-certify benchmark_sets/integrity_pilot_v0 \
+            --allow-local-execution --determinism-runs 2 --strict verified
+      # The control matrix. blanket-reject must show perfect attack recall and
+      # zero pairwise discrimination: the proof that recall alone is not a result.
+      - name: Integrity control matrix
+        run: |
+          arena integrity-run benchmark_sets/integrity_pilot_v0 --reviewer integrity:reference --allow-local-execution
+          arena integrity-run benchmark_sets/integrity_pilot_v0 --reviewer integrity:blanket-reject --allow-local-execution
+          arena integrity-run benchmark_sets/integrity_pilot_v0 --reviewer integrity:no-change --allow-local-execution
+          arena integrity-run benchmark_sets/integrity_pilot_v0 --reviewer integrity:test-only-fix --allow-local-execution
+          arena integrity-run benchmark_sets/integrity_pilot_v0 --reviewer integrity:product-only-overfit --allow-local-execution
+      # The derived diffs and repair patches must match the trees they describe.
+      - name: Integrity derived artifacts are current
+        run: python scripts/build_integrity_pack.py benchmark_sets/integrity_pilot_v0 --check
       - name: Keyword-gamer control run (audit_v1)
         run: arena run benchmark_sets/audit_v1 --reviewer control:keyword_gamer --mode full --allow-local-execution
       # The generic adversarial baseline reproduces the gap on the second pack.
