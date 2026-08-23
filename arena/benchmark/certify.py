@@ -22,14 +22,13 @@ from __future__ import annotations
 import shutil
 import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
 from arena.benchmark.mutation import run_mutation_test
 from arena.benchmark.snapshot import snapshot_pack
 from arena.benchmark.solution import fixed_solution
-from arena.core.errors import ValidationError
 from arena.core.models import BenchmarkCase
-from arena.execution.commands import parse_test_commands
+from arena.execution.commands import is_pytest_command
 from arena.execution.test_executor import TestExecutionRequest, TestExecutionResult, TestExecutor
 
 # A certified case's tests must kill at least this fraction of viable mutants:
@@ -142,24 +141,12 @@ _PYTEST_GENUINE_FAILURE_EXIT_CODE = 1
 
 
 def _is_pytest_command(test_command: str | list[str] | list[list[str]] | None) -> bool:
-    """True if the case runs its tests through pytest (directly or python -m pytest)."""
-    if test_command is None:
-        return False
-    try:
-        commands = parse_test_commands(test_command)
-    except ValidationError:
-        return False
-    for argv in commands:
-        if not argv:
-            continue
-        program = PurePosixPath(argv[0]).name
-        if program == "pytest":
-            return True
-        if program in {"python", "python3"} and "-m" in argv:
-            index = argv.index("-m")
-            if index + 1 < len(argv) and argv[index + 1] == "pytest":
-                return True
-    return False
+    """True if the case runs its tests through pytest (directly or python -m pytest).
+
+    Delegates to the shared helper so certification and the integrity track cannot
+    disagree about which commands pytest's exit-code vocabulary applies to.
+    """
+    return is_pytest_command(test_command)
 
 
 def _baseline_fails(result: TestExecutionResult | None, *, pytest_command: bool) -> bool:
