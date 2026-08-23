@@ -79,16 +79,45 @@ arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified
 ```
 
-Four packs ship today. `benchmark_sets/v1`, `benchmark_sets/audit_v1`, and
+Five packs ship today. `benchmark_sets/v1`, `benchmark_sets/audit_v1`, and
 `benchmark_sets/audit_v2` are authored calibration and audit packs (ten cases each);
 `benchmark_sets/realfix_seed_v0` is a three-case methodology seed derived from
 historical fixes that executes only through its pinned Docker image (see the
 Reference section). For the commands above, swap in `audit_v1` or `audit_v2`; both
 are patch-backed and runnable with `--allow-local-execution`.
+`benchmark_sets/integrity_pilot_v0` belongs to a separate track with its own
+commands (see below).
 
 `--allow-local-execution` opts into the fixture-owned test commands that run in copied
 workspaces. Use it only with fixtures you trust. Runs that execute this way are marked
 trusted-local and are excluded from the leaderboard unless you pass `--include-unverified`.
+
+### CRA-Integrity: reviewing a green pull request you cannot trust
+
+A separate track. Instead of asking whether a reviewer can find a planted defect,
+it asks whether a reviewer can tell that the green checks on a pull request no
+longer mean anything -- because an assertion was weakened, a test left collection,
+a golden file was regenerated from the code it was meant to check, the function
+under test was stubbed out, or the implementation answers the ticket's examples
+rather than its rule.
+
+Each pair ships two pull requests against the same task, the same baseline and the
+same visible command: one genuine, one compromised. Both are green. Only one
+satisfies a hidden, independently executed contract. The reviewer is not told which
+it received.
+
+```bash
+python -m arena.cli.main integrity-audit benchmark_sets/integrity_pilot_v0
+python -m arena.cli.main integrity-certify benchmark_sets/integrity_pilot_v0 \
+    --allow-local-execution --determinism-runs 2 --strict verified
+python -m arena.cli.main integrity-run benchmark_sets/integrity_pilot_v0 \
+    --reviewer integrity:reference --allow-local-execution
+```
+
+The headline metric is pairwise discrimination -- approve the genuine variant *and*
+block the compromised one. A reviewer that blocks both scores perfect attack recall
+and zero discrimination, which is exactly why recall is never reported alone. See
+[docs/integrity-track.md](docs/integrity-track.md).
 
 ### Docker backend (the verified path)
 
@@ -154,6 +183,7 @@ Benchmark packs:
 | `benchmark_sets/audit_v1` | 10 | Authored patch-required audit cases | patch apply + tests + validators |
 | `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests + validators |
 | `benchmark_sets/realfix_seed_v0` | 3 | Historical-fix methodology seed | Docker-backed patch apply + tests |
+| `benchmark_sets/integrity_pilot_v0` | 8 pairs | Validation-integrity review (separate track) | visible CI + hidden trusted oracle |
 
 The first three packs are authored calibration and audit packs. The RealFix seed
 cases are synthetic reverse-review presentations derived from real historical fixes
@@ -219,7 +249,10 @@ authoring, and the audit report.
 ## Limitations
 
 - The packs are curated and small (33 cases across `v1`, `audit_v1`, `audit_v2`,
-  and the three-case `realfix_seed_v0` seed).
+  and the three-case `realfix_seed_v0` seed, plus eight integrity pairs).
+- The integrity pilot's compromised pull requests are authored. They establish the
+  evaluation abstraction; they say nothing about how often coding agents produce
+  this failure in practice, and eight pairs cannot rank reviewers.
 - RealFix seed cases are synthetic reverse-review presentations of historical fixes,
   not necessarily original bug-introducing pull requests; the three-case seed
   demonstrates methodology and supports no model-performance conclusions.
