@@ -7,7 +7,9 @@ RUN apt-get update \
 COPY pyproject.toml README.md ./
 COPY arena ./arena
 COPY benchmark_sets ./benchmark_sets
-RUN pip install --no-cache-dir .
+# [run] brings the test runner the copied packs invoke. Installing bare `.` left
+# the image able to serve the API but unable to execute a single case locally.
+RUN pip install --no-cache-dir ".[run]"
 
 EXPOSE 8000
 CMD ["arena", "serve", "--host", "0.0.0.0", "--port", "8000"]
