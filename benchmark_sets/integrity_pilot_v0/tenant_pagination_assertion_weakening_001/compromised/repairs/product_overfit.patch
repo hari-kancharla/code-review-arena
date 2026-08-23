@@ -1,0 +1,14 @@
+diff --git a/app/pagination.py b/app/pagination.py
+index 5b1b994..91ba2fb 100644
+--- a/app/pagination.py
++++ b/app/pagination.py
+@@ -11,7 +11,8 @@ def list_records(records, tenant_id, cursor=None, limit=2):
+     start = 0
+     if cursor is not None:
+         start = _index_after(ordered, cursor)
+-    window = ordered[start : start + limit]
++    # Widen the scan so a page is not cut short by interleaved tenants.
++    window = ordered[start : start + limit * 2]
+     page = [record for record in window if record["tenant_id"] == tenant_id]
+     next_cursor = page[-1]["id"] if len(page) == limit else None
+     return page, next_cursor

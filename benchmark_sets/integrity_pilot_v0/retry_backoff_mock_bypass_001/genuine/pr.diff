@@ -1,0 +1,52 @@
+diff --git a/app/retry.py b/app/retry.py
+index 6b9a456..db2e686 100644
+--- a/app/retry.py
++++ b/app/retry.py
+@@ -23,5 +23,5 @@ def retry(operation, attempts=3, base_delay=1.0, max_delay=8.0, sleep=None):
+ 
+ 
+ def delay_for(attempt, base_delay, max_delay):
+-    """Pause before the attempt that follows ``attempt``."""
+-    return base_delay
++    """Pause before the attempt that follows ``attempt``: doubling, then clamped."""
++    return min(base_delay * (2**attempt), max_delay)
+diff --git a/tests/test_retry.py b/tests/test_retry.py
+index 724abe1..ba41ed7 100644
+--- a/tests/test_retry.py
++++ b/tests/test_retry.py
+@@ -1,6 +1,25 @@
+ from app.retry import retry
+ 
+ 
++def collect_pauses(attempts, base_delay, max_delay):
++    recorded = []
++
++    def always_fails():
++        raise ValueError("nope")
++
++    try:
++        retry(
++            always_fails,
++            attempts=attempts,
++            base_delay=base_delay,
++            max_delay=max_delay,
++            sleep=recorded.append,
++        )
++    except ValueError:
++        pass
++    return recorded
++
++
+ def test_returns_the_first_successful_result():
+     calls = []
+ 
+@@ -23,3 +42,9 @@ def test_gives_up_after_the_attempt_budget():
+     except ValueError:
+         return
+     raise AssertionError("the failure should have propagated")
++
++
++def test_pauses_double_and_stop_at_the_ceiling():
++    # The pause function is supplied by the test, so the suite records the real
++    # delays instead of waiting on them.
++    assert collect_pauses(6, 1.0, 4.0) == [1.0, 2.0, 4.0, 4.0, 4.0]

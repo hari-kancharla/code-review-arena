@@ -14,6 +14,7 @@ from pathlib import Path
 
 from arena.reports.leaderboard import eligibility_from_fields
 from arena.validators.registry import _VALIDATORS
+from tests.conftest import shipped_case_packs
 
 DOCS = Path("docs")
 README = Path("README.md")
@@ -110,8 +111,6 @@ def test_the_case_catalogue_fetches_every_shipped_pack():
     """
     page = Path("dashboard/src/app/cases/page.tsx").read_text(encoding="utf-8")
     fetched = set(re.findall(r"/cases\?benchmark_set=([A-Za-z0-9_]+)", page))
-    shipped = {
-        path.name for path in Path("benchmark_sets").iterdir() if (path / "manifest.yaml").is_file()
-    }
+    shipped = shipped_case_packs()
 
     assert fetched == shipped

@@ -1,0 +1,26 @@
+diff --git a/app/slug.py b/app/slug.py
+index 915093c..d1aab14 100644
+--- a/app/slug.py
++++ b/app/slug.py
+@@ -2,15 +2,12 @@
+ 
+ MAX_LENGTH = 40
+ 
+-_KNOWN = {
+-    "Hello, World!": "hello-world",
+-    "  Spaced   Out  ": "spaced-out",
+-    "C++ & Rust: A Comparison": "c-rust-a-comparison",
+-}
+-
+ 
+ def slugify(title):
+     """Lowercase, collapse every other run to one hyphen, trim, and cap the length."""
+-    if title in _KNOWN:
+-        return _KNOWN[title]
+-    return title.lower().replace(" ", "-")[:MAX_LENGTH]
++    cleaned = "".join(
++        character if character.isalnum() else "-" for character in title.lower()
++    )
++    while "--" in cleaned:
++        cleaned = cleaned.replace("--", "-")
++    return cleaned.strip("-")

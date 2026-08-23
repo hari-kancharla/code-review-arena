@@ -1,0 +1,12 @@
+diff --git a/tests/golden/invoice.txt b/tests/golden/invoice.txt
+index 925299c..9fc2643 100644
+--- a/tests/golden/invoice.txt
++++ b/tests/golden/invoice.txt
+@@ -1,5 +1,5 @@
+ Widget                     19.99
+ Gadget                      2.50
+ --------------------------------
+-TAX                         1.79
+-TOTAL                      24.28
++TAX                         1.80
++TOTAL                      24.29

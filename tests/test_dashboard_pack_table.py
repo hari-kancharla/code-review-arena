@@ -14,6 +14,8 @@ from pathlib import Path
 
 import yaml
 
+from tests.conftest import shipped_case_packs
+
 PAGE = Path("dashboard/src/app/page.tsx")
 README = Path("README.md")
 PACKS = Path("benchmark_sets")
@@ -47,7 +49,7 @@ def test_dashboard_case_counts_match_the_manifests():
 
 def test_dashboard_lists_every_shipped_pack():
     """A pack that ships but is not listed is invisible to every reader."""
-    shipped = {path.name for path in PACKS.iterdir() if (path / "manifest.yaml").is_file()}
+    shipped = shipped_case_packs()
 
     assert set(_declared_in_dashboard()) == shipped
 
@@ -72,7 +74,7 @@ def test_readme_case_counts_match_the_manifests():
 
 
 def test_readme_lists_every_shipped_pack():
-    shipped = {path.name for path in PACKS.iterdir() if (path / "manifest.yaml").is_file()}
+    shipped = shipped_case_packs()
 
     assert set(_declared_in_readme()) == shipped
 

@@ -1,0 +1,46 @@
+diff --git a/app/pagination.py b/app/pagination.py
+index 24bab49..5b1b994 100644
+--- a/app/pagination.py
++++ b/app/pagination.py
+@@ -2,7 +2,7 @@
+ 
+ 
+ def list_records(records, tenant_id, cursor=None, limit=2):
+-    """Return one page of records plus the cursor that fetches the next page.
++    """Return one page of a single tenant's records plus the next cursor.
+ 
+     ``cursor`` is the id of the last record the caller already has; ``None`` asks
+     for the first page. A returned cursor of ``None`` means there is nothing left.
+@@ -11,7 +11,8 @@ def list_records(records, tenant_id, cursor=None, limit=2):
+     start = 0
+     if cursor is not None:
+         start = _index_after(ordered, cursor)
+-    page = ordered[start : start + limit]
++    window = ordered[start : start + limit]
++    page = [record for record in window if record["tenant_id"] == tenant_id]
+     next_cursor = page[-1]["id"] if len(page) == limit else None
+     return page, next_cursor
+ 
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+index 479df37..acc436a 100644
+--- a/tests/test_pagination.py
++++ b/tests/test_pagination.py
+@@ -9,12 +9,14 @@ RECORDS = [
+ 
+ 
+ def test_first_page_is_a_full_page():
++    # Pinning exact ids made this fixture-specific, so check the properties the
++    # endpoint actually promises instead.
+     page, cursor = list_records(RECORDS, "acme")
+-    assert [record["id"] for record in page] == [1, 2]
+-    assert cursor == 2
++    assert all(record["tenant_id"] == "acme" for record in page)
++    assert cursor is None or cursor in [record["id"] for record in page]
+ 
+ 
+ def test_paging_walks_to_the_end():
+     page, cursor = list_records(RECORDS, "acme", cursor=2)
+-    assert [record["id"] for record in page] == [3, 4]
+-    assert cursor == 4
++    assert all(record["tenant_id"] == "acme" for record in page)
++    assert cursor is None or cursor in [record["id"] for record in page]

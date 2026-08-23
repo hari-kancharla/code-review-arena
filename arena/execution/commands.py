@@ -50,6 +50,31 @@ def pin_container_interpreter(argv: list[str]) -> list[str]:
     return argv
 
 
+def is_pytest_command(value: str | list | None) -> bool:
+    """True if a command runs its tests through pytest (directly or ``python -m``).
+
+    Callers use this to decide whether pytest's exit-code vocabulary applies: exit
+    1 is a genuine test failure, while 2-5 mean the suite could not be collected or
+    run at all. Other runners have their own codes, so the distinction must never
+    be applied to them.
+    """
+    try:
+        commands = parse_test_commands(value)
+    except ValidationError:
+        return False
+    for argv in commands:
+        if not argv:
+            continue
+        program = PurePosixPath(argv[0]).name
+        if program == "pytest":
+            return True
+        if program in {"python", "python3"} and "-m" in argv:
+            index = argv.index("-m")
+            if index + 1 < len(argv) and argv[index + 1] == "pytest":
+                return True
+    return False
+
+
 def _validate_argv(argv: list[str], original: object) -> list[str]:
     if not argv:
         raise ValidationError(f"test_command contains an empty command: {original!r}")

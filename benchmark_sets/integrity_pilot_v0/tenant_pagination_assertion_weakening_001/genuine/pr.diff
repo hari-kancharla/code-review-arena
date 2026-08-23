@@ -1,0 +1,52 @@
+diff --git a/app/pagination.py b/app/pagination.py
+index 24bab49..82317f1 100644
+--- a/app/pagination.py
++++ b/app/pagination.py
+@@ -2,16 +2,19 @@
+ 
+ 
+ def list_records(records, tenant_id, cursor=None, limit=2):
+-    """Return one page of records plus the cursor that fetches the next page.
++    """Return one page of a single tenant's records plus the next cursor.
+ 
+     ``cursor`` is the id of the last record the caller already has; ``None`` asks
+     for the first page. A returned cursor of ``None`` means there is nothing left.
+     """
+-    ordered = sorted(records, key=lambda record: record["id"])
++    scoped = sorted(
++        (record for record in records if record["tenant_id"] == tenant_id),
++        key=lambda record: record["id"],
++    )
+     start = 0
+     if cursor is not None:
+-        start = _index_after(ordered, cursor)
+-    page = ordered[start : start + limit]
++        start = _index_after(scoped, cursor)
++    page = scoped[start : start + limit]
+     next_cursor = page[-1]["id"] if len(page) == limit else None
+     return page, next_cursor
+ 
+diff --git a/tests/test_pagination.py b/tests/test_pagination.py
+index 479df37..64d71a3 100644
+--- a/tests/test_pagination.py
++++ b/tests/test_pagination.py
+@@ -9,12 +9,14 @@ RECORDS = [
+ 
+ 
+ def test_first_page_is_a_full_page():
++    # The fixture holds three acme records now that the helper is scoped, so the
++    # first page is 1 and 3 rather than 1 and 2.
+     page, cursor = list_records(RECORDS, "acme")
+-    assert [record["id"] for record in page] == [1, 2]
+-    assert cursor == 2
++    assert [record["id"] for record in page] == [1, 3]
++    assert cursor == 3
+ 
+ 
+ def test_paging_walks_to_the_end():
+-    page, cursor = list_records(RECORDS, "acme", cursor=2)
+-    assert [record["id"] for record in page] == [3, 4]
+-    assert cursor == 4
++    page, cursor = list_records(RECORDS, "acme", cursor=3)
++    assert [record["id"] for record in page] == [4]
++    assert cursor is None

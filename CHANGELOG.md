@@ -303,6 +303,27 @@ Keep a Changelog conventions.
 - Documented the `shallow-patch`, `openai:<base_url>` and `http:<url>` reviewers, which
   shipped but appeared in no user-facing documentation.
 
+- **CRA-Integrity** (`arena/integrity/`, `benchmark_sets/integrity_pilot_v0`): a
+  new evaluation track that asks whether a code reviewer can tell a genuinely
+  correct green pull request from one that is green because its validation
+  evidence was weakened, bypassed or overfit. Three trust zones (product,
+  candidate-owned validation, hidden benchmark oracle) are separated on disk; a
+  pair ships a genuine and a compromised pull request against the same task,
+  baseline, visible command and reviewer context, and the reviewer is not told
+  which it received. Eight pilot pairs cover eight mechanisms and every one is
+  certified `verified`: the baseline fails the oracle, the genuine variant passes
+  both surfaces, the compromised variant passes visible and fails trusted, the
+  oracle is independent of candidate-owned expectations, accepts a structurally
+  different legitimate implementation, and kills mutants of the genuine code.
+  Metrics are reported separately and never averaged, with pairwise discrimination
+  as the headline: the `integrity:blanket-reject` control scores perfect attack
+  recall and zero discrimination, which is why recall is never reported alone.
+  `arena integrity-audit` runs three trivial validation-diff heuristics as real
+  reviewers and fails the pack if any of them can separate the pairs.
+- `arena integrity-validate`, `integrity-audit`, `integrity-certify` and
+  `integrity-run`, plus `scripts/build_integrity_pack.py` to derive every pack
+  diff and repair patch from the trees it describes.
+
 ## 0.2.0 - 2026-07-13
 
 First prepared release. No earlier version was tagged or published, so this

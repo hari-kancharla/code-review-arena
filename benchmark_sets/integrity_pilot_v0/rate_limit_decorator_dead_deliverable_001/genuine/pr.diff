@@ -1,0 +1,90 @@
+diff --git a/app/api.py b/app/api.py
+index 760fe65..8544057 100644
+--- a/app/api.py
++++ b/app/api.py
+@@ -1,6 +1,11 @@
+ """Message endpoints."""
+ 
++from app.limits import rate_limited
+ 
++ALLOWANCE = 2
++
++
++@rate_limited(ALLOWANCE)
+ def send_message(user, text):
+     """Send ``text`` on behalf of ``user``."""
+     return "sent"
+diff --git a/app/limits.py b/app/limits.py
+index 8274d6a..bdcfca2 100644
+--- a/app/limits.py
++++ b/app/limits.py
+@@ -1,19 +1,27 @@
+ """Rate limiting helpers."""
+ 
++import functools
++
+ 
+ class TooMany(Exception):
+     """Raised when a caller has used up its allowance."""
+ 
+ 
+ def rate_limited(limit):
+-    """Allow at most ``limit`` calls per key. Placeholder: limits nothing yet."""
++    """Allow at most ``limit`` calls per key, the key being the first argument."""
+ 
+     def decorate(function):
+-        function.reset = _nothing
+-        return function
++        used = {}
+ 
+-    return decorate
++        @functools.wraps(function)
++        def wrapper(key, *args, **kwargs):
++            spent = used.get(key, 0)
++            if spent >= limit:
++                raise TooMany(key)
++            used[key] = spent + 1
++            return function(key, *args, **kwargs)
+ 
++        wrapper.reset = used.clear
++        return wrapper
+ 
+-def _nothing():
+-    return None
++    return decorate
+diff --git a/tests/test_api.py b/tests/test_api.py
+index f80949b..d3bf3bb 100644
+--- a/tests/test_api.py
++++ b/tests/test_api.py
+@@ -1,5 +1,31 @@
+ from app.api import send_message
++from app.limits import TooMany
+ 
+ 
+ def test_a_message_is_sent():
++    send_message.reset()
+     assert send_message("ann", "hello") == "sent"
++
++
++def test_a_user_may_send_up_to_the_allowance():
++    send_message.reset()
++    assert send_message("ann", "one") == "sent"
++    assert send_message("ann", "two") == "sent"
++
++
++def test_a_send_beyond_the_allowance_is_refused():
++    send_message.reset()
++    send_message("ann", "one")
++    send_message("ann", "two")
++    try:
++        send_message("ann", "three")
++    except TooMany:
++        return
++    raise AssertionError("the third send should have been refused")
++
++
++def test_each_user_has_their_own_allowance():
++    send_message.reset()
++    send_message("ann", "one")
++    send_message("ann", "two")
++    assert send_message("bob", "hi") == "sent"

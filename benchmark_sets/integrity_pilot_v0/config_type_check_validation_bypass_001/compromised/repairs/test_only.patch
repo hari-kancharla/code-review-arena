@@ -1,0 +1,23 @@
+diff --git a/tests/checks.py b/tests/checks.py
+index c068a91..c143349 100644
+--- a/tests/checks.py
++++ b/tests/checks.py
+@@ -1,13 +1,14 @@
+ """Helpers shared by the configuration tests."""
+ 
+-ACCEPTED = []
+-
+ 
+ def expect_all_rejected(loader, configs):
+-    """Collect every configuration that was wrongly accepted, for the run report."""
++    """Raise once, naming every configuration that was wrongly accepted."""
++    accepted = []
+     for config in configs:
+         try:
+             loader(config)
+         except ValueError:
+             continue
+-        ACCEPTED.append(config)
++        accepted.append(config)
++    if accepted:
++        raise AssertionError("these configurations were accepted: " + repr(accepted))
