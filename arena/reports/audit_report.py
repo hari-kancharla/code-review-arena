@@ -192,6 +192,11 @@ def build_audit_report_data(
                 "primary_failure_mode": (
                     run_failure_counter.most_common(1)[0][0] if run_failure_counter else None
                 ),
+                # Integrity provenance travels with the row into the artifact, so a
+                # published number can always be traced back to the trust state of
+                # the run that produced it.
+                "run_status": run.run_status,
+                "pack_checksum_verified": run.metadata.pack_checksum_verified,
             }
         )
 
@@ -316,14 +321,16 @@ def render_audit_report_markdown(data: dict[str, Any]) -> str:
     lines = [f"# {data['title']}", ""]
     if data.get("empty"):
         pack = data["summary"]["benchmark_pack"]
-        lines.extend(
-            [
-                f"_No {pack} runs were found under the requested runs directory._",
-                "",
-                "## Reproducibility",
-                "",
-            ]
-        )
+        excluded = data["summary"].get("excluded_run_count", 0)
+        lines.append(f"_No admissible {pack} runs were found under the requested runs directory._")
+        if excluded:
+            lines.append("")
+            lines.append(
+                f"_{excluded} run(s) were found but excluded: the harness did not stamp them "
+                "`run_status=complete` (a tampered pack, a run that produced nothing, or one "
+                "that needed execution it never got). Re-run them before publishing._"
+            )
+        lines.extend(["", "## Reproducibility", ""])
         lines.extend(f"- `{command}`" for command in data["reproducibility_commands"])
         lines.extend(["", "## Limitations", ""])
         lines.extend(f"- {item}" for item in data["limitations"])
@@ -340,6 +347,12 @@ def render_audit_report_markdown(data: dict[str, Any]) -> str:
             f"- Reviewers tested: {', '.join(summary['reviewers_tested']) or 'none'}",
         ]
     )
+    excluded = summary.get("excluded_run_count", 0)
+    if excluded:
+        lines.append(
+            f"- Runs excluded as untrustworthy: {excluded} "
+            "(`run_status` was not `complete`; not counted in any figure below)"
+        )
     gap = summary.get("biggest_detection_validation_gap")
     if gap:
         lines.append(

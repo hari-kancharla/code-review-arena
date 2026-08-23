@@ -15,12 +15,20 @@ def audit_report(
     console = Console()
     if data.get("empty"):
         console.print(
-            f"[yellow]No {benchmark_set} runs found[/yellow]; wrote empty-state report to {output}"
+            f"[yellow]No admissible {benchmark_set} runs found[/yellow]; "
+            f"wrote empty-state report to {output}"
         )
     else:
         console.print(
             f"[green]Audit report written[/green] to {output} "
             f"({data['summary']['run_count']} run(s))"
+        )
+    excluded = data["summary"].get("excluded_run_count", 0)
+    if excluded:
+        Console(stderr=True).print(
+            f"[yellow]WARNING[/yellow] {excluded} run(s) were excluded from this report: the "
+            "harness did not stamp them run_status=complete (tampered pack, no results, or "
+            "execution that never happened). They are recorded as excluded, not published."
         )
     if json_output is not None:
         console.print(f"[green]Dashboard JSON[/green] written to {json_output}")

@@ -261,6 +261,24 @@ class RunRepository:
                     # rate beside it contradicts.
                     "validated_eligible_case_count": len(eligible_cases),
                     "deterministic_metrics": metrics,
+                    # Whether this row would survive the DEFAULT (comparable) policy.
+                    # With include_unverified the result set mixes both, so the row has
+                    # to carry its own status or a consumer cannot label it honestly.
+                    "verified": eligibility_from_fields(
+                        schema_version=data.get("schema_version", 1),
+                        run_status=data.get("run_status", "complete"),
+                        execution_backend=data.get("execution_backend", "none"),
+                        coverage_rate=data.get("coverage_rate", 1.0),
+                        pack_digest_externally_verified=bool(
+                            (data.get("metadata") or {}).get(
+                                "pack_digest_externally_verified", False
+                            )
+                        ),
+                        non_exact_output_used=(data.get("metadata") or {}).get(
+                            "non_exact_output_used"
+                        ),
+                        include_unverified=False,
+                    ),
                 }
             )
 

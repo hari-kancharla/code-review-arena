@@ -64,6 +64,10 @@ class AuditReviewerRow(_Strict):
     latency_per_case_ms: float | None = None
     run_id: str
     primary_failure_mode: str | None = None
+    # Integrity provenance for the run behind this row. Defaulted for reports
+    # written before these fields existed.
+    run_status: str = "complete"
+    pack_checksum_verified: bool | None = None
 
 
 class AuditGap(_Strict):

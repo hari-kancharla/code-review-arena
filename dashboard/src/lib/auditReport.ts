@@ -121,6 +121,10 @@ export function loadReportLeaderboardRows(): LeaderboardRow[] {
       run_id: row.run_id,
       benchmark_set: "audit_v1",
       detail_available: false,
+      // These are the audit results committed to the repository, not the viewer's
+      // own runs. The marker is what lets the table say so out loud.
+      source: "shipped-snapshot" as const,
+      verified: false,
       score: 0,
       bugs_found: 0,
       case_count: report?.summary.case_count ?? 10,

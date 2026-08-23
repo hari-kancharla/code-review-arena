@@ -3,7 +3,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from arena.core.models import DeterministicMetrics, RunMetadata, RunResult
-from arena.reports.audit_report import build_audit_report_data, write_audit_report
+from arena.reports.audit_report import (
+    build_audit_report_data,
+    render_audit_report_markdown,
+    write_audit_report,
+)
 from arena.reports.json_report import write_json_report
 
 
@@ -15,11 +19,14 @@ def _sample_run(
     schema_version: int = 2,
     run_status: str = "complete",
     completed_at: datetime | None = None,
+    pack_checksum_verified: bool | None = None,
 ) -> RunResult:
     """A run shaped like one the current harness writes: schema v2, complete.
 
     ``schema_version``/``run_status`` are overridable so the validity-filter tests
-    can build the untrustworthy runs a report must refuse to publish.
+    can build the untrustworthy runs a report must refuse to publish, and
+    ``pack_checksum_verified`` so the provenance carried onto a published row can
+    be asserted.
     """
     metrics = DeterministicMetrics(
         detection_f_beta=detection,
@@ -42,7 +49,11 @@ def _sample_run(
         run_status=run_status,
         started_at=datetime.now(UTC),
         completed_at=completed_at or datetime.now(UTC),
-        metadata=RunMetadata(prompt_version="v1", benchmark_version="audit_v1"),
+        metadata=RunMetadata(
+            prompt_version="v1",
+            benchmark_version="audit_v1",
+            pack_checksum_verified=pack_checksum_verified,
+        ),
         case_results=[],
         total_score=100.0,
         mode="full",
@@ -137,6 +148,67 @@ def test_audit_report_json_matches_schema_and_markdown(tmp_path: Path):
     markdown = output.read_text(encoding="utf-8")
     assert f"{data['reviewers'][0]['validated_f_beta']:.3f}" in markdown
     assert report.summary.reviewers_tested == data["summary"]["reviewers_tested"]
+
+
+def test_tampered_pack_run_is_never_published(tmp_path: Path):
+    """A run the harness stamped invalid cannot reach a published report.
+
+    This is the exact shape of the leak: editing a pack makes the harness record
+    run_status=invalid and pack_checksum_verified=False, and the report builder
+    then promoted that run to a headline reviewer row anyway.
+    """
+    tampered = _sample_run(
+        "run-2026-08-14-must-not-publish",
+        validated=1.0,
+        detection=1.0,
+        run_status="invalid",
+        pack_checksum_verified=False,
+    )
+    data = build_audit_report_data([tampered])
+
+    assert data["empty"] is True
+    assert data["reviewers"] == []
+    assert data["summary"]["run_count"] == 0
+    # Excluded, not silently dropped.
+    assert data["summary"]["excluded_run_count"] == 1
+
+    markdown = render_audit_report_markdown(data)
+    assert "excluded" in markdown
+    assert "run-2026-08-14-must-not-publish" not in markdown
+
+
+def test_invalid_runs_excluded_but_valid_ones_still_reported():
+    """One bad run does not suppress the good ones; the exclusion is still counted."""
+    good = _sample_run("good", validated=1.0, detection=1.0)
+    bad = _sample_run("bad", validated=0.0, detection=1.0, run_status="invalid")
+    failed = _sample_run("failed", validated=0.0, detection=0.0, run_status="failed")
+    legacy = _sample_run("legacy", validated=1.0, detection=1.0, schema_version=1)
+
+    data = build_audit_report_data([good, bad, failed, legacy])
+
+    assert data["empty"] is False
+    assert [row["run_id"] for row in data["reviewers"]] == ["good"]
+    assert data["summary"]["excluded_run_count"] == 3
+    assert "Runs excluded as untrustworthy: 3" in render_audit_report_markdown(data)
+
+
+def test_report_rows_carry_integrity_provenance():
+    """A published figure can be traced to the trust state that produced it."""
+    run = _sample_run("clean", validated=1.0, detection=1.0, pack_checksum_verified=True)
+    row = build_audit_report_data([run])["reviewers"][0]
+    assert row["run_status"] == "complete"
+    assert row["pack_checksum_verified"] is True
+
+
+def test_report_and_leaderboard_share_one_integrity_floor():
+    """The two publishing paths must not drift apart on what counts as trustworthy."""
+    from arena.reports.leaderboard import leaderboard_eligible
+
+    invalid = _sample_run("x", validated=1.0, detection=1.0, run_status="invalid")
+    # The leaderboard refuses it even when asked to include unverified runs...
+    assert leaderboard_eligible(invalid, include_unverified=True) is False
+    # ...so the report must refuse it too.
+    assert build_audit_report_data([invalid])["reviewers"] == []
 
 
 def test_audit_report_schema_rejects_drift():

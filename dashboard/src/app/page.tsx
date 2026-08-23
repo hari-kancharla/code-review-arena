@@ -87,9 +87,9 @@ const emptyCommands = `arena run benchmark_sets/audit_v1 --reviewer reference-pa
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0`;
 
 export default async function Home() {
-  const liveRows = await fetchJson<LeaderboardRow[]>("/leaderboard").catch(
-    () => [],
-  );
+  const liveRows = await fetchJson<LeaderboardRow[]>(
+    "/leaderboard?include_unverified=true",
+  ).catch(() => []);
   const auditV1 = readAuditReport("audit-v1.json").report;
   const auditV2 = readAuditReport("audit-v2.json").report;
   const reportSnapshots = [auditV1, auditV2].filter(
@@ -199,7 +199,17 @@ export default async function Home() {
             <Link href="/leaderboard">View all results</Link>
           </div>
           {previewRows.length ? (
-            <LeaderboardPreview rows={previewRows} />
+            <>
+              <LeaderboardPreview rows={previewRows} />
+              {previewRows.some((row) => row.source === "shipped-snapshot") ? (
+                <p className="table-footnote">
+                  Rows marked <em>shipped audit result</em> come from the audit
+                  snapshot committed to this repository, not from your own runs.
+                  Your runs appear on the{" "}
+                  <Link href="/leaderboard">leaderboard</Link>.
+                </p>
+              ) : null}
+            </>
           ) : (
             <EmptyState
               title="No benchmark runs recorded"
@@ -498,6 +508,11 @@ function LeaderboardPreview({ rows }: { rows: LeaderboardRow[] }) {
                 <td className="numeric">{index + 1}</td>
                 <td>
                   <strong>{reviewerDisplayName(row)}</strong>
+                  {row.source === "shipped-snapshot" ? (
+                    <div className="table-subtitle">
+                      shipped audit result, not your run
+                    </div>
+                  ) : null}
                 </td>
                 <td>
                   <code>{row.benchmark_set ?? "recorded"}</code>

@@ -237,6 +237,9 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
                       {showModel(row) ? (
                         <div className="table-subtitle">{row.model}</div>
                       ) : null}
+                      {provenanceNote(row) ? (
+                        <div className="table-subtitle">{provenanceNote(row)}</div>
+                      ) : null}
                     </td>
                     <td className="numeric strong-metric metric-cell">
                       <span>{formatNumber(validated)}</span>
@@ -291,6 +294,20 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
         <code>detection_f_beta</code> only measures whether the seeded bug was
         found and localized.
       </p>
+      {sorted.some((row) => row.source === "shipped-snapshot") ? (
+        <p className="table-footnote">
+          Rows marked <em>shipped audit result</em> come from the audit snapshot
+          committed to this repository, not from your own runs.
+        </p>
+      ) : null}
+      {sorted.some((row) => row.verified === false) ? (
+        <p className="table-footnote">
+          Rows marked <em>unverified</em> did not meet the default comparability
+          policy (Docker-backed, full coverage, externally verified pack, exact
+          reviewer output) and are shown here only because this view includes
+          them.
+        </p>
+      ) : null}
       <p className="table-footnote">{CONTROL_BASELINE_NOTE}</p>
     </>
   );
@@ -325,6 +342,15 @@ function value(
     return dynamicF(metrics, "detection", beta) ?? 0;
   if (metric === "latency_per_case_ms") return metrics.latency_per_case_ms;
   return metrics[metric];
+}
+
+// Where a row came from and whether it is comparable. Silence here is what let
+// shipped audit numbers read as the viewer's own measurements.
+function provenanceNote(row: LeaderboardRow): string | null {
+  if (row.source === "shipped-snapshot")
+    return "shipped audit result, not your run";
+  if (row.verified === false) return "unverified: not comparable by default";
+  return null;
 }
 
 function validationBadge(row: LeaderboardRow) {

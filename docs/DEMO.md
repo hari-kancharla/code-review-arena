@@ -52,10 +52,14 @@ arena leaderboard runs/ --metric validated_case_rate --include-unverified --json
 ## 4. Build the report snapshot the dashboard reads
 
 ```bash
-arena audit-report runs/ --output docs/reports/audit-v1-results.md
+arena audit-report runs/ --output docs/reports/audit-v1-results.md \
+  --json-output dashboard/public/reports/audit-v1.json
 ```
 
-This writes `dashboard/public/reports/audit-v1.json` (versioned and validated on write).
+`--json-output` is required to write the dashboard snapshot; it overwrites a tracked,
+committed file, so it is never written implicitly. Both outputs are versioned and
+validated on write, and runs the harness marked invalid are excluded and reported
+rather than aggregated.
 Optionally refresh the project-health snapshot:
 
 ```bash

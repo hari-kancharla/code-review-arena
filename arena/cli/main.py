@@ -7,6 +7,21 @@ import typer
 
 from arena.cli.commands.audit_report import audit_report as audit_report_command
 from arena.cli.commands.import_fix import import_fix_command
+from arena.cli.commands.integrity import (
+    available_reviewers,
+)
+from arena.cli.commands.integrity import (
+    integrity_audit as integrity_audit_command,
+)
+from arena.cli.commands.integrity import (
+    integrity_certify as integrity_certify_command,
+)
+from arena.cli.commands.integrity import (
+    integrity_run as integrity_run_command,
+)
+from arena.cli.commands.integrity import (
+    integrity_validate as integrity_validate_command,
+)
 from arena.cli.commands.leaderboard import leaderboard as leaderboard_command
 from arena.cli.commands.list_cases import list_cases as list_cases_command
 from arena.cli.commands.mine_fixes import mine_fixes_command
@@ -354,6 +369,92 @@ def certify_pack(
         raise typer.Exit(code=1)
 
 
+DEFAULT_INTEGRITY_PACK = Path("benchmark_sets/integrity_pilot_v0")
+
+
+@app.command("integrity-validate")
+def integrity_validate(
+    pack: Path = typer.Argument(DEFAULT_INTEGRITY_PACK),
+) -> None:
+    """Load a CRA-Integrity pair pack and report its structure (no execution)."""
+    integrity_validate_command(resolve_benchmark_path(pack))
+
+
+@app.command("integrity-audit")
+def integrity_audit(
+    pack: Path = typer.Argument(DEFAULT_INTEGRITY_PACK),
+) -> None:
+    """Score trivial validation-diff heuristics against a pair pack.
+
+    A pack a "flag every test change" strategy can separate is measuring diff
+    shape, not reviewing ability. Offline and fast; no execution.
+    """
+    integrity_audit_command(resolve_benchmark_path(pack))
+
+
+@app.command("integrity-certify")
+def integrity_certify(
+    pack: Path = typer.Argument(DEFAULT_INTEGRITY_PACK),
+    allow_local_execution: bool = typer.Option(False, "--allow-local-execution"),
+    docker_image: str | None = typer.Option(None, "--docker-image"),
+    determinism_runs: int = typer.Option(
+        1,
+        "--determinism-runs",
+        min=1,
+        help="Re-run the four defining verdicts this many times to earn 'verified'.",
+    ),
+    limit: int = typer.Option(24, "--limit", min=1, help="Max oracle mutants per pair."),
+    strict: str = typer.Option(
+        "", "--strict", help="Exit nonzero unless the pack reaches this level."
+    ),
+) -> None:
+    """Admit or reject each pair: green-and-correct versus green-but-wrong, proven."""
+    from arena.cli.commands.integrity import LEVELS
+
+    if strict and strict not in LEVELS:
+        raise typer.BadParameter(f"--strict must be one of {', '.join(LEVELS)}")
+    integrity_certify_command(
+        resolve_benchmark_path(pack),
+        allow_local_execution=allow_local_execution,
+        docker_image=docker_image,
+        determinism_runs=determinism_runs,
+        mutation_limit=limit,
+        strict=strict,
+    )
+
+
+@app.command("integrity-run")
+def integrity_run(
+    pack: Path = typer.Argument(DEFAULT_INTEGRITY_PACK),
+    reviewer: str = typer.Option(
+        "integrity:reference", "--reviewer", help=f"One of: {available_reviewers()}"
+    ),
+    allow_local_execution: bool = typer.Option(False, "--allow-local-execution"),
+    docker_image: str | None = typer.Option(None, "--docker-image"),
+    condition: str | None = typer.Option(
+        None,
+        "--condition",
+        help="Reviewer information condition (ablation); defaults to the pair's own.",
+    ),
+    pair_id: list[str] = typer.Option([], "--pair-id", help="Restrict the run to these pairs."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the run result as JSON."),
+    output: Path | None = typer.Option(
+        None, "--output", help="Directory to write the run record into."
+    ),
+) -> None:
+    """Review every pair with one reviewer and report the integrity metrics."""
+    integrity_run_command(
+        resolve_benchmark_path(pack),
+        reviewer,
+        allow_local_execution=allow_local_execution,
+        docker_image=docker_image,
+        condition=condition,
+        pair_id=list(pair_id),
+        as_json=as_json,
+        output=output,
+    )
+
+
 @app.command("lint-cases")
 def lint_cases(
     benchmark_set: Path = typer.Argument(DEFAULT_BENCHMARK_SET),
@@ -492,8 +593,13 @@ def audit_report(
         "--output",
     ),
     json_output: Path | None = typer.Option(
-        Path("dashboard/public/reports/audit-v1.json"),
+        None,
         "--json-output",
+        help=(
+            "Also write the dashboard JSON to this path. No longer defaults to "
+            "dashboard/public/reports/audit-v1.json: publishing to a tracked, committed "
+            "file must be an explicit choice, not a side effect of running the report."
+        ),
     ),
     benchmark_set: str = typer.Option(
         "audit_v1", "--benchmark-set", help="Which pack's runs to aggregate."

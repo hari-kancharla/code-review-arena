@@ -144,6 +144,22 @@ def run(
             "reviewer output): this run is NON-COMPARABLE by default and excluded from the "
             f"default leaderboard. parse status counts: {counts}."
         )
+    # Unparseable output is recorded in run.json but was previously never shown, so a
+    # reviewer that failed on every case read as a reviewer that simply found nothing.
+    parse_counts = dict(result.metadata.reviewer_parse_status_counts)
+    invalid_cases = parse_counts.get("invalid", 0)
+    if invalid_cases:
+        produced = sum(parse_counts.values())
+        detail = (
+            "the reviewer never returned usable output; this is a broken reviewer, not a "
+            "score of zero"
+            if invalid_cases == produced
+            else "those cases scored as reviewer-contract failures"
+        )
+        Console(stderr=True).print(
+            f"[yellow]WARNING[/yellow] {invalid_cases}/{produced} case(s) produced unparseable "
+            f"reviewer output: {detail}. parse status counts: {parse_counts}."
+        )
     unavailable = sum(1 for case in result.case_results if case.execution_unavailable)
     if unavailable:
         ran_backends = {"docker", "trusted-local"}
