@@ -92,7 +92,7 @@ jobs:
           cache: pip
       # Resolver-consistent minimum-compatible install: the constraints file pins
       # the declared floors in one resolution pass (not install-latest-then-downgrade).
-      - run: python -m pip install -c constraints/minimum.txt -e ".[dev]"
+      - run: python -m pip install -c constraints/minimum.pip -e ".[dev]"
       - name: Report versions and check the environment
         run: |
           python --version
@@ -151,11 +151,19 @@ jobs:
           arena run benchmark_sets/realfix_seed_v0 --reviewer reference-patch --mode full --json > /tmp/realfix-reference.json
           python - <<'PY'
           import json
+          import yaml
+
+          # Expected count comes from the manifest, never a literal: a pack that
+          # gains a case must not need this workflow edited to keep passing, and
+          # must not silently pass with fewer cases than it ships.
+          expected = len(yaml.safe_load(open("benchmark_sets/realfix_seed_v0/manifest.yaml"))["cases"])
           result = json.load(open("/tmp/realfix-reference.json"))
           cases = result["case_results"]
           validated = sum(case["deterministic_pass"] is True for case in cases)
-          if len(cases) != 3 or validated != 3:
-              raise SystemExit(f"expected 3/3 validated seed cases, got {validated}/{len(cases)}")
+          if len(cases) != expected or validated != expected:
+              raise SystemExit(
+                  f"expected {expected}/{expected} validated seed cases, got {validated}/{len(cases)}"
+              )
           print(f"reference-patch validated {validated}/{len(cases)} seed cases")
           PY
       - name: Shallow-patch control validates no seed case
@@ -163,11 +171,16 @@ jobs:
           arena run benchmark_sets/realfix_seed_v0 --reviewer shallow-patch --mode full --json > /tmp/realfix-shallow.json
           python - <<'PY'
           import json
+          import yaml
+
+          expected = len(yaml.safe_load(open("benchmark_sets/realfix_seed_v0/manifest.yaml"))["cases"])
           result = json.load(open("/tmp/realfix-shallow.json"))
           cases = result["case_results"]
           validated = sum(case["deterministic_pass"] is True for case in cases)
-          if len(cases) != 3 or validated != 0:
-              raise SystemExit(f"expected 0/3 validated control cases, got {validated}/{len(cases)}")
+          if len(cases) != expected or validated != 0:
+              raise SystemExit(
+                  f"expected 0/{expected} validated control cases, got {validated}/{len(cases)}"
+              )
           print(f"shallow-patch validated {validated}/{len(cases)} seed cases")
           PY
 
@@ -194,6 +207,41 @@ jobs:
           /tmp/fresh/bin/arena --help
           /tmp/fresh/bin/arena schema > /dev/null
           /tmp/fresh/bin/python -c "import importlib.resources as r; assert (r.files('arena') / 'storage' / 'schema.sql').is_file()"
+      # An install without the test runner must FAIL CLOSED, not silently score
+      # every reviewer 0%. This job previously only ran --help/schema, so a wheel
+      # that could not execute a single case still passed CI.
+      - name: A wheel without the test runner reports an invalid run, not 0%
+        run: |
+          set +e
+          /tmp/fresh/bin/arena run benchmark_sets/audit_v1 --reviewer reference-patch \
+            --mode full --allow-local-execution --json > /tmp/norunner.json
+          status=$?
+          set -e
+          test "$status" -ne 0 || { echo "expected a non-zero exit without the runner"; exit 1; }
+          python - <<'PY'
+          import json
+          result = json.load(open("/tmp/norunner.json"))
+          if result["run_status"] != "invalid":
+              raise SystemExit(f"expected run_status=invalid, got {result['run_status']}")
+          if not all(case["execution_unavailable"] for case in result["case_results"]):
+              raise SystemExit("every case should report an unavailable backend")
+          print("no-runner install correctly reports an invalid run")
+          PY
+      # With the run extra, the same wheel validates every reference patch. This
+      # is the packaging equivalent of the backend job's execution-backed proof.
+      - name: The wheel plus [run] validates every audit_v1 case
+        run: |
+          /tmp/fresh/bin/pip install "$(ls dist/*.whl)[run]"
+          /tmp/fresh/bin/arena run benchmark_sets/audit_v1 --reviewer reference-patch \
+            --mode full --allow-local-execution --json > /tmp/withrunner.json
+          python - <<'PY'
+          import json
+          result = json.load(open("/tmp/withrunner.json"))
+          rate = result["deterministic_metrics"]["validated_case_rate"]
+          if result["run_status"] != "complete" or rate != 1.0:
+              raise SystemExit(f"expected complete run at 1.0, got {result['run_status']} {rate}")
+          print("wheel + [run] validated every case")
+          PY
 
   dashboard:
     name: Dashboard build
