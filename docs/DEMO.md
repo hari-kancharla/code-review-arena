@@ -36,8 +36,10 @@ arena run benchmark_sets/audit_v1 --reviewer control:malformed_patch --mode full
 ```
 
 Rank them, and emit JSON for scripting. These runs used local execution, so they
-are trusted-local (unverified); `--include-unverified` shows them on the leaderboard
-(Docker-backed runs appear without it):
+are trusted-local (unverified); `--include-unverified` shows them on the leaderboard.
+Docker alone does not make a run appear without that flag -- default eligibility also
+requires full coverage, exact reviewer output, a reviewer that could not reach the answer
+key, and a pack digest supplied with `--expected-pack-sha256`:
 
 ```bash
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified

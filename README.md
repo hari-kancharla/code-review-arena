@@ -2,7 +2,7 @@
 
 Execution-backed benchmark for AI code-review agents.
 
-[![CI](https://github.com/harihkk/code-review-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/harihkk/code-review-arena/actions/workflows/ci.yml)
+[![CI](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
@@ -65,6 +65,34 @@ The harness assumes reviewers and benchmark packs may be adversarial:
   requires a server-side opt-in, and `ARENA_API_TOKEN` adds token auth. It is not
   hardened for public exposure.
 
+## Training-data exposure
+
+Every RealFix case is derived from a public repository, so the upstream fix and the
+discussion explaining it are plausibly in the training data of the model under
+evaluation — the standard criticism of any benchmark built from GitHub history. The
+harness answers with disclosure rather than a cleanliness claim it could not support.
+
+Each case records when its answer became public, read from the commit object by
+`arena import-fix` rather than remembered by a human. Each run may declare the
+evaluated model's knowledge cutoff, which is accepted only with a basis and a
+citation:
+
+```bash
+arena run benchmark_sets/realfix_seed_v0 --reviewer <spec> --mode full \
+  --model-knowledge-cutoff 2025-12-01 --model-cutoff-basis vendor_documented \
+  --model-cutoff-source "https://.../model-card" --reviewer-retrieval none
+```
+
+Cases then split into `pre_cutoff` / `post_cutoff` / `undetermined` /
+`not_applicable`, stamped per case so anyone can recompute the analysis from a stored
+run. An undated case is never imputed into a cohort, and the difference between the
+cohorts is withheld unless the comparison is actually powered — on today's five-case
+seed it is withheld, and the published `min_detectable_gap` of 1.0 says why. Exposure
+is disclosure and never leaderboard eligibility.
+
+Full treatment, including what this deliberately does **not** claim:
+[docs/training-data-exposure.md](docs/training-data-exposure.md).
+
 ## Quickstart
 
 Python 3.11 or newer is required.
@@ -79,12 +107,19 @@ arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified
 ```
 
-Four packs ship today. `benchmark_sets/v1`, `benchmark_sets/audit_v1`, and
-`benchmark_sets/audit_v2` are authored calibration and audit packs (ten cases each);
-`benchmark_sets/realfix_seed_v0` is a three-case methodology seed derived from
+Four packs ship today. `benchmark_sets/v1` (nine cases) and `benchmark_sets/audit_v1` /
+`benchmark_sets/audit_v2` (ten each) are authored calibration and audit packs;
+`benchmark_sets/realfix_seed_v0` is a five-case methodology seed derived from
 historical fixes that executes only through its pinned Docker image (see the
 Reference section). For the commands above, swap in `audit_v1` or `audit_v2`; both
 are patch-backed and runnable with `--allow-local-execution`.
+
+Use `audit_v1` or `audit_v2` for scoring. `v1` is the older calibration pack and mixes
+stacks: three of its nine cases (TypeScript, SQL) have no runnable test suite, so they
+are judged by structural validators only and are excluded from `validated_case_rate`,
+which reports over the six execution-backed cases. Every run
+publishes `validated_eligible_case_count` and `non_execution_backed_case_count` so
+the denominator is never something you have to infer.
 
 `--allow-local-execution` opts into the fixture-owned test commands that run in copied
 workspaces. Use it only with fixtures you trust. Runs that execute this way are marked
@@ -102,15 +137,28 @@ bash scripts/build_bench_image.sh        # builds the arena-bench:1 image
 Point a pack at it with `default_docker_image: arena-bench:1` in its `manifest.yaml`, or
 set `docker_image` on a case. The executor never pulls a missing image (the name comes
 from the pack), so the image must be built first; otherwise execution-backed runs cleanly
-skip and report `invalid`. Docker-backed runs are leaderboard-eligible without
+skip and report `invalid`. Docker is necessary for default leaderboard eligibility but
+not sufficient: a run also needs full coverage, exact reviewer output, a reviewer that
+could not reach the answer key, and a pack digest supplied out of band with
+`--expected-pack-sha256`. Anything short of all of those is inspectable only with
 `--include-unverified`.
 
 ## Benchmark your own model
 
-The built-in reviewers are the deterministic controls and `reference-patch`. To score a
-real model, wrap it in any local command that reads the case JSON and prints review JSON,
-then point `custom-command` at it. The payload is blind (no ground truth and no
-descriptive metadata), so a reviewer cannot pass on metadata alone.
+The built-in reviewers are the deterministic controls, `reference-patch`, and
+`shallow-patch` (a generic adversarial baseline). To score a real model you have two
+options, and both keep the payload blind (no ground truth, no descriptive metadata), so a
+reviewer cannot pass on metadata alone:
+
+- Point `--reviewer openai:<base_url>` (or `http:<url>`) straight at a local model server —
+  Ollama, vLLM, LM Studio, llama.cpp — with `--model`, no wrapper needed.
+- Or wrap any model in a local command that reads the case JSON and prints review JSON,
+  and point `custom-command` at it.
+
+```bash
+arena run benchmark_sets/audit_v1 --reviewer openai:http://localhost:11434/v1 \
+  --model llama3 --mode full --allow-local-execution
+```
 
 ```bash
 arena schema                       # the JSON contract your wrapper must emit
@@ -150,18 +198,19 @@ Benchmark packs:
 
 | Pack | Cases | Purpose | Validation |
 |---|---:|---|---|
-| `benchmark_sets/v1` | 10 | Authored baseline cases | review scoring + validation |
+| `benchmark_sets/v1` | 9 | Authored baseline cases | review scoring + validation |
 | `benchmark_sets/audit_v1` | 10 | Authored patch-required audit cases | patch apply + tests + validators |
-| `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests + validators |
-| `benchmark_sets/realfix_seed_v0` | 3 | Historical-fix methodology seed | Docker-backed patch apply + tests |
+| `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests |
+| `benchmark_sets/realfix_seed_v0` | 5 | Historical-fix methodology seed | Docker-backed patch apply + tests |
 
 The first three packs are authored calibration and audit packs. The RealFix seed
 cases are synthetic reverse-review presentations derived from real historical fixes
-in attrs, click, and rich (upstream licenses and notices ship inside the pack): the
-review diff is the inverse of the historical fix, not necessarily an original
-bug-introducing pull request. Three cases demonstrate the ingestion-to-certification
-methodology end to end; they support no conclusions about model performance. Larger
-historical datasets are built outside the core harness with `arena import-fix`
+in attrs, click, packaging, and rich (upstream licenses and notices ship inside the
+pack): the review diff is the inverse of the historical fix, not necessarily an
+original bug-introducing pull request. Five cases demonstrate the
+ingestion-to-certification methodology end to end; they support no conclusions about
+model performance. Candidate fixes are found with `arena mine-fixes` and turned into
+packs with `arena import-fix`
 ([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)). The seed
 executes only in its pinned image; build it first with
 `bash docker/realfix_seed/build.sh`.
@@ -218,10 +267,10 @@ authoring, and the audit report.
 
 ## Limitations
 
-- The packs are curated and small (33 cases across `v1`, `audit_v1`, `audit_v2`,
-  and the three-case `realfix_seed_v0` seed).
+- The packs are curated and small (34 cases across `v1`, `audit_v1`, `audit_v2`,
+  and the five-case `realfix_seed_v0` seed).
 - RealFix seed cases are synthetic reverse-review presentations of historical fixes,
-  not necessarily original bug-introducing pull requests; the three-case seed
+  not necessarily original bug-introducing pull requests; the five-case seed
   demonstrates methodology and supports no model-performance conclusions.
 - Concept matching is lexical (curated keywords), not semantic; well-paraphrased
   findings can be under-credited. Execution metrics do not have this problem.

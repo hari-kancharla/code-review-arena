@@ -24,8 +24,10 @@ the reference and adversarial control runs:
 A Docker job builds the sandbox images, runs the real Docker execution tests, then
 certifies the RealFix seed pack with `--limit 20 --determinism-runs 3 --strict verified`
 (its cases execute only in the pinned `arena-realfix-seed:0` image) and checks the seed
-controls: `reference-patch` must validate all three cases and `shallow-patch` must
-validate none. Further jobs cover the minimum dependency floors, the packaging smoke
+controls: `reference-patch` must validate every case the manifest lists and
+`shallow-patch` must validate none. Both checks read the expected count from
+`manifest.yaml`, so a pack that gains a case cannot quietly pass a check written for the
+old size. Further jobs cover the minimum dependency floors, the packaging smoke
 test, the dashboard build (`npm ci` then `npm run build`), and Windows fail-closed
 behavior. To benchmark your own reviewer in CI, add a step that runs
 `arena run ... --reviewer custom-command --command "..."`.
