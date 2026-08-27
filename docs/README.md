@@ -27,7 +27,6 @@ Start here, then read by topic.
 - [audit-report.md](audit-report.md) - generating the report and dashboard JSON
 - [adding-new-cases.md](adding-new-cases.md) - case layout and validation
 - [historical-fix-ingestion.md](historical-fix-ingestion.md) - import a local fix commit pair into a candidate pack
-- [research/realfix-seed-v0.md](research/realfix-seed-v0.md) - the RealFix seed pack: provenance, certification evidence, and limits
 - [research/cra-integrity-pilot-v0.md](research/cra-integrity-pilot-v0.md) - the integrity pilot: every pair attempted, rejected and accepted, with its evidence
 - [github-action.md](github-action.md) - continuous integration
 

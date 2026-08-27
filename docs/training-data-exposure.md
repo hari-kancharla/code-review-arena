@@ -1,6 +1,6 @@
 # Training-data exposure
 
-Every case in `realfix_seed_v0` is derived from a public GitHub repository. The
+Every historical-fix (RealFix) case is derived from a public GitHub repository. The
 upstream fix, its regression test, and usually a pull-request discussion
 explaining the defect are plausibly in the pretraining corpus of any model being
 evaluated. A model may therefore reproduce a repair it remembers rather than one
@@ -75,7 +75,7 @@ A knowledge cutoff is an **operator claim about a vendor claim**. The harness
 never infers one from a model id and never asserts one itself:
 
 ```bash
-arena run benchmark_sets/realfix_seed_v0 --reviewer <spec> --mode full \
+arena run path/to/realfix-benchmark/packs/realfix_pilot_v1 --reviewer <spec> --mode full \
   --model-knowledge-cutoff 2025-12-01 \
   --model-cutoff-basis vendor_documented \
   --model-cutoff-source "https://…/model-card" \
@@ -136,7 +136,7 @@ otherwise.
 Cohort counts, cohort rates with Wilson intervals, the reason census, the
 repository × cohort cross-tab and `min_detectable_gap` are published **either
 way**. `min_detectable_gap` is the number that states the cohort sizes' resolving
-power before a reader has to work it out: on today's five-case seed it is `1.0`,
+power before a reader has to work it out: on a five-case pack it is `1.0`,
 meaning nothing short of the entire range would be detectable.
 
 ## What this is not

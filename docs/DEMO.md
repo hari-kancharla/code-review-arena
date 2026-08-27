@@ -17,7 +17,6 @@ python -m pip install -e ".[dev]"
 arena validate benchmark_sets/v1
 arena validate benchmark_sets/audit_v1
 arena validate benchmark_sets/audit_v2
-arena validate benchmark_sets/realfix_seed_v0
 ```
 
 Each prints `Valid benchmark set` and exits 0.

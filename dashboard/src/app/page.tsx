@@ -63,13 +63,6 @@ const benchmarkPacks = [
     purpose: "Certified logic-defect cases",
     validation: "patch apply + tests",
   },
-  {
-    id: "benchmark_sets/realfix_seed_v0",
-    label: "realfix_seed_v0",
-    cases: 5,
-    purpose: "Historical-fix methodology seed",
-    validation: "Docker-backed patch apply + tests",
-  },
 ];
 
 const trustControls = [

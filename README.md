@@ -67,10 +67,13 @@ The harness assumes reviewers and benchmark packs may be adversarial:
 
 ## Training-data exposure
 
-Every RealFix case is derived from a public repository, so the upstream fix and the
-discussion explaining it are plausibly in the training data of the model under
+Every historical-fix case is derived from a public repository, so the upstream fix and
+the discussion explaining it are plausibly in the training data of the model under
 evaluation — the standard criticism of any benchmark built from GitHub history. The
 harness answers with disclosure rather than a cleanliness claim it could not support.
+The cases themselves live in
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark); this
+repository provides the machinery that imports, dates and splits them.
 
 Each case records when its answer became public, read from the commit object by
 `arena import-fix` rather than remembered by a human. Each run may declare the
@@ -78,7 +81,7 @@ evaluated model's knowledge cutoff, which is accepted only with a basis and a
 citation:
 
 ```bash
-arena run benchmark_sets/realfix_seed_v0 --reviewer <spec> --mode full \
+arena run path/to/realfix-benchmark/packs/realfix_pilot_v1 --reviewer <spec> --mode full \
   --model-knowledge-cutoff 2025-12-01 --model-cutoff-basis vendor_documented \
   --model-cutoff-source "https://.../model-card" --reviewer-retrieval none
 ```
@@ -86,9 +89,9 @@ arena run benchmark_sets/realfix_seed_v0 --reviewer <spec> --mode full \
 Cases then split into `pre_cutoff` / `post_cutoff` / `undetermined` /
 `not_applicable`, stamped per case so anyone can recompute the analysis from a stored
 run. An undated case is never imputed into a cohort, and the difference between the
-cohorts is withheld unless the comparison is actually powered — on today's five-case
-seed it is withheld, and the published `min_detectable_gap` of 1.0 says why. Exposure
-is disclosure and never leaderboard eligibility.
+cohorts is withheld unless the comparison is actually powered; when it is not, the
+published `min_detectable_gap` says why. Exposure is disclosure and never leaderboard
+eligibility.
 
 Full treatment, including what this deliberately does **not** claim:
 [docs/training-data-exposure.md](docs/training-data-exposure.md).
@@ -107,12 +110,13 @@ arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified
 ```
 
-Five packs ship today. `benchmark_sets/v1` (nine cases) and `benchmark_sets/audit_v1` /
-`benchmark_sets/audit_v2` (ten each) are authored calibration and audit packs;
-`benchmark_sets/realfix_seed_v0` is a five-case methodology seed derived from
-historical fixes that executes only through its pinned Docker image (see the
-Reference section). For the commands above, swap in `audit_v1` or `audit_v2`; both
-are patch-backed and runnable with `--allow-local-execution`.
+Four packs ship today. `benchmark_sets/v1` (nine cases) and `benchmark_sets/audit_v1` /
+`benchmark_sets/audit_v2` (ten each) are authored calibration and audit packs. For the
+commands above, swap in `audit_v1` or `audit_v2`; both are patch-backed and runnable
+with `--allow-local-execution`. The execution-verified historical-fix cases (RealFix)
+are **not** in this repository — they are a separate versioned dataset,
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), which
+this harness runs against.
 `benchmark_sets/integrity_pilot_v0` belongs to a separate track with its own
 commands (see below).
 
@@ -230,20 +234,17 @@ Benchmark packs:
 | `benchmark_sets/v1` | 9 | Authored baseline cases | review scoring + validation |
 | `benchmark_sets/audit_v1` | 10 | Authored patch-required audit cases | patch apply + tests + validators |
 | `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests |
-| `benchmark_sets/realfix_seed_v0` | 5 | Historical-fix methodology seed | Docker-backed patch apply + tests |
 | `benchmark_sets/integrity_pilot_v0` | 8 pairs | Validation-integrity review (separate track) | visible CI + hidden trusted oracle |
 
-The first three packs are authored calibration and audit packs. The RealFix seed
-cases are synthetic reverse-review presentations derived from real historical fixes
-in attrs, click, packaging, and rich (upstream licenses and notices ship inside the
-pack): the review diff is the inverse of the historical fix, not necessarily an
-original bug-introducing pull request. Five cases demonstrate the
-ingestion-to-certification methodology end to end; they support no conclusions about
-model performance. Candidate fixes are found with `arena mine-fixes` and turned into
+The first three packs are authored calibration and audit packs. Historical-fix
+(RealFix) cases are **not** shipped here: they are a separate versioned dataset,
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), because
+each case bundles a full source-plus-tests tree that does not scale cleanly inside
+the harness repository. That repository pins this harness as a
+dependency and runs its pack through the commands above. This repository keeps the
+ingestion machinery: candidate fixes are found with `arena mine-fixes` and turned into
 packs with `arena import-fix`
-([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)). The seed
-executes only in its pinned image; build it first with
-`bash docker/realfix_seed/build.sh`.
+([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)).
 
 Metrics:
 
@@ -297,14 +298,16 @@ authoring, and the audit report.
 
 ## Limitations
 
-- The packs are curated and small (34 cases across `v1`, `audit_v1`, `audit_v2`,
-  and the five-case `realfix_seed_v0` seed, plus eight integrity pairs).
+- The packs are curated and small (29 cases across `v1`, `audit_v1` and `audit_v2`,
+  plus eight integrity pairs). The historical-fix cases live in a separate dataset
+  repository and are counted there.
 - The integrity pilot's compromised pull requests are authored. They establish the
   evaluation abstraction; they say nothing about how often coding agents produce
   this failure in practice, and eight pairs cannot rank reviewers.
-- RealFix seed cases are synthetic reverse-review presentations of historical fixes,
-  not necessarily original bug-introducing pull requests; the five-case seed
-  demonstrates methodology and supports no model-performance conclusions.
+- RealFix cases are synthetic reverse-review presentations of historical fixes, not
+  necessarily original bug-introducing pull requests. They demonstrate methodology and
+  support no model-performance conclusions. They are versioned and documented in the
+  dataset repository, not here.
 - Concept matching is lexical (curated keywords), not semantic; well-paraphrased
   findings can be under-credited. Execution metrics do not have this problem.
 - Structural validators are comment-stripped heuristics: hand-authored, may reject

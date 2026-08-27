@@ -6,14 +6,9 @@ so they are derived -- but only from hunks that both remove and add lines, since
 a delete-only hunk is cleanup and an add-only hunk is supporting code.
 """
 
-from pathlib import Path
-
 import pytest
-import yaml
 
 from arena.importer.line_ranges import derive_line_ranges, files_created_by
-
-SEED = Path("benchmark_sets/realfix_seed_v0")
 
 
 def _ranges(patch: str, path: str) -> list[tuple[int, int]]:
@@ -77,39 +72,6 @@ def test_ranges_are_per_file():
     assert _ranges(patch, "one.py") == [(6, 6)]
     assert _ranges(patch, "two.py") == [(41, 41)]
     assert _ranges(patch, "absent.py") == []
-
-
-def _seed_cases():
-    if not SEED.is_dir():
-        return []
-    return sorted(d for d in SEED.iterdir() if (d / "case.yaml").is_file())
-
-
-@pytest.mark.parametrize("case_dir", _seed_cases(), ids=lambda d: d.name)
-def test_derivation_agrees_with_human_authored_ground_truth(case_dir):
-    """The rule is validated against ground truth a human wrote from real fixes.
-
-    Exact agreement is ideal, but "contained within the authored range" is also
-    correct and deliberately safe: line_match_quality awards "full" when a
-    finding CONTAINS the expected range, so a narrower expectation is more
-    forgiving to a good reviewer, while a wider one would unfairly downgrade it.
-    """
-    spec = yaml.safe_load((case_dir / "case.yaml").read_text(encoding="utf-8"))
-    ground_truth = spec["ground_truth"]
-    bug = ground_truth.get("primary_bug") or ground_truth["bugs"][0]
-    expected_file = bug["files"][0]
-    authored = [(item["start"], item["end"]) for item in expected_file["line_ranges"]]
-
-    derived = _ranges(
-        (case_dir / "reference.patch").read_text(encoding="utf-8"), expected_file["path"]
-    )
-
-    assert derived, "every seed case has a behavioural hunk"
-    assert len(derived) == len(authored)
-    for start, end in derived:
-        assert any(low <= start and end <= high for low, high in authored), (
-            f"{derived} is neither equal to nor inside {authored}"
-        )
 
 
 @pytest.mark.parametrize(
