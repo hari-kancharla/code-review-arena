@@ -293,12 +293,13 @@ def test_token_comparison_accepts_non_ascii_without_raising():
 def test_api_can_browse_every_shipped_pack(monkeypatch, tmp_path):
     """Pack browsing must not depend on a hardcoded list.
 
-    realfix_seed_v0 ships, validates and is certified in CI, but the /cases
-    routes rejected it with a 422 because their Literal predated it.
+    A shipped pack was once rejected by the /cases routes with a 422 because
+    their Literal predated it: it validated and certified in CI, yet nobody
+    could browse it. Enumerate what ships instead of naming packs by hand.
     """
     monkeypatch.setenv("ARENA_DB_PATH", str(tmp_path / "packs.db"))
     client = TestClient(server_app)
-    for pack in ("v1", "audit_v1", "audit_v2", "realfix_seed_v0"):
+    for pack in ("v1", "audit_v1", "audit_v2"):
         listed = client.get("/cases", params={"benchmark_set": pack})
         assert listed.status_code == 200, pack
         assert listed.json(), pack

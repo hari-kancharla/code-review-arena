@@ -105,9 +105,9 @@ def test_the_published_reviewer_schema_parses_as_exact():
 def test_the_case_catalogue_fetches_every_shipped_pack():
     """A pack absent from the catalogue is invisible to anyone browsing it.
 
-    `realfix_seed_v0` shipped, validated, certified and ran in CI while the page
-    fetched only the other three, so the one pack built from real historical
-    fixes was the one nobody could see.
+    A pack once shipped, validated, certified and ran in CI while the page
+    fetched only the others, so the pack nobody could see was the one that
+    mattered most. The set is derived from what ships, never hardcoded.
     """
     page = Path("dashboard/src/app/cases/page.tsx").read_text(encoding="utf-8")
     fetched = set(re.findall(r"/cases\?benchmark_set=([A-Za-z0-9_]+)", page))
