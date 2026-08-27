@@ -8,9 +8,10 @@ large diff is tedious and easy to get wrong, so this derives them.
 The rule, and why it is this rule: only hunks that BOTH remove and add lines are
 treated as the defect. A hunk that only deletes is cleanup (an import that became
 unused once the real fix landed); a hunk that only adds is supporting code (a new
-helper, a new import). Checked against the three human-authored cases in
-`benchmark_sets/realfix_seed_v0`, this reproduces the authored ranges exactly for
-attrs and click, and for rich yields (703, 704) where the author wrote (699, 705)
+helper, a new import). Checked against three human-authored historical-fix cases
+(now versioned in the realfix-benchmark dataset), this reproduces the authored
+ranges exactly for attrs and click, and for rich yields (703, 704) where the
+author wrote (699, 705)
 -- strictly inside it, and therefore *more* forgiving rather than wrong, because
 `line_match_quality` awards "full" when a finding CONTAINS the expected range and
 counts any overlap as localized. Erring narrow keeps a good reviewer from being

@@ -21,10 +21,10 @@ the reference and adversarial control runs:
 - run: arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified
 ```
 
-A Docker job builds the sandbox images, runs the real Docker execution tests, then
-certifies the RealFix seed pack with `--limit 20 --determinism-runs 3 --strict verified`
-(its cases execute only in the pinned `arena-realfix-seed:0` image) and checks the seed
-controls: `reference-patch` must validate every case the manifest lists and
+A Docker job builds the sandbox images and runs the real Docker execution tests. The
+execution-verified historical-fix cases live in a separate dataset repository,
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), whose own CI certifies them against this harness pinned by commit, and
+checks its controls: `reference-patch` must validate every case the manifest lists and
 `shallow-patch` must validate none. Both checks read the expected count from
 `manifest.yaml`, so a pack that gains a case cannot quietly pass a check written for the
 old size. Further jobs cover the minimum dependency floors, the packaging smoke
