@@ -1,0 +1,35 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/f8f16338e10d5d509ea2a29e0f0cf56baf4be565/LICENSE
+buggy_commit: 4339d3a0028348e21863664e6022e3cff20c3411
+fixed_commit: f8f16338e10d5d509ea2a29e0f0cf56baf4be565
+fixed_date: '2026-03-08'
+issue_url: https://github.com/pypa/packaging/pull/1093
+pull_request_url: https://github.com/pypa/packaging/pull/1093
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/_structures.py
+changed_test_paths:
+- tests/test_structures.py
+changed_source_line_count: 12
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/1093 (Infinity sentinels
+  compare as unordered against themselves) is a historical repair whose parent is the buggy
+  tree. The added or rewritten regression coverage in tests/test_structures.py fails on that
+  parent and passes at the fix.
+why_buggy_behavior_is_wrong: InfinityType and NegativeInfinityType implemented ordering against
+  every other object, including the same sentinel, so Infinity < Infinity was true and Infinity
+  <= Infinity was false. A total order over the version sentinels must treat a sentinel as
+  equal to itself.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_structures.py -q` (`tests/test_structures.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/_structures.py in
+  the after/ tree) is exactly the hunk the historical fix rewrites: InfinityType.__le__ always
+  returned False and __gt__ always True, and equality used isinstance rather than object identity,
+  so a sentinel did not compare equal-or-ordered to itself. Each comparison with the same
+  object must follow identity. The added tests pin that defective behaviour.'
+admission_status: accepted

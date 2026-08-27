@@ -82,9 +82,9 @@ than counted as a pass, so a no-op patch cannot earn credit on it.
 
 ## Sample size and confidence
 
-The packs are small (five to ten cases each), so a point estimate is not a reliable
+The packs are small (ten to 24 cases each), so a point estimate is not a reliable
 ranking. A single case flipping moves a per-pack rate by 10 points on a ten-case pack and
-by 20 on the five-case seed, and the Wilson 95% confidence
+by about 4 points on the 24-case RealFix pack, and the Wilson 95% confidence
 interval for, say, 7/10 is roughly [0.40, 0.89]. `validated_case_rate` therefore carries a
 Wilson interval (`validated_case_rate_ci_low/high`), which the leaderboard renders as a
 bracketed range. Treat two reviewers whose intervals overlap as statistically tied rather

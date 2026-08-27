@@ -1,0 +1,65 @@
+category: correctness
+description: The normalized-name pattern used a negative lookahead that failed to
+  reject a name such as a--b, so is_normalized_name returned true for a spelling that
+  canonicalize_name would still rewrite.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_utils.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - hyphen-separated groups
+    concepts:
+    - canonical name
+    - adjacent hyphens
+    files:
+    - line_ranges:
+      - end: 61
+        start: 61
+      path: src/packaging/utils.py
+    id: bug-1
+    must_mention:
+    - adjacent hyphens
+    summary: The normalized-name regular expression used a negative lookahead that
+      still matched names containing adjacent hyphens, so is_normalized_name accepted
+      spellings that are not canonical.
+id: packaging_normalized_name_double_hyphen_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-06-08'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: is_normalized_name accepts collapsed double hyphens
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

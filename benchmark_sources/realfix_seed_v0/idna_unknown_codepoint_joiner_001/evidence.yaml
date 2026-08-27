@@ -1,0 +1,33 @@
+source_label: kjd/idna
+repository_url: https://github.com/kjd/idna
+license: BSD-3-Clause
+license_url: https://github.com/kjd/idna/blob/b0d8f3c45d83b8b9bce0975a59f0c8ab6645694c/LICENSE.md
+buggy_commit: 1d365e17e10d72d0b7876316fc7b9ca0eebdd38d
+fixed_commit: b0d8f3c45d83b8b9bce0975a59f0c8ab6645694c
+fixed_date: '2024-04-24'
+issue_url: https://github.com/kjd/idna/commit/b0d8f3c45d83
+pull_request_url: https://github.com/kjd/idna/commit/b0d8f3c45d83
+source_selectors:
+- idna
+tests_root: tests
+changed_source_paths:
+- idna/core.py
+changed_test_paths:
+- tests/test_idna.py
+changed_source_line_count: 8
+category: correctness
+evidence_summary: Upstream https://github.com/kjd/idna/commit/b0d8f3c45d83 (Unknown codepoint
+  next to a joiner leaks ValueError) is a historical repair whose parent is the buggy tree.
+  The added or rewritten regression coverage in tests/test_idna.py fails on that parent and
+  passes at the fix.
+why_buggy_behavior_is_wrong: check_label asked valid_contextj whether a CONTEXTJ codepoint
+  was allowed, and that helper raised ValueError when an adjacent codepoint was missing from
+  Unicode data, so encode/decode leaked ValueError instead of IDNAError.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_idna.py -q` (`tests/test_idna.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (idna/core.py in the after/ tree)
+  is exactly the hunk the historical fix rewrites: valid_contextj raised ValueError for a
+  codepoint absent from Unicode data. That failure escaped check_label instead of becoming
+  IDNAError. The added tests pin that defective behaviour.'
+admission_status: accepted

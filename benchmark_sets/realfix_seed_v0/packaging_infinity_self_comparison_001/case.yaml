@@ -1,0 +1,69 @@
+category: correctness
+description: InfinityType and NegativeInfinityType implemented ordering against every
+  other object, including the same sentinel, so Infinity < Infinity was true and Infinity
+  <= Infinity was false. A total order over the version sentinels must treat a sentinel
+  as equal to itself.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_structures.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - identity check
+    concepts:
+    - sentinel identity
+    - total order
+    files:
+    - line_ranges:
+      - end: 28
+        start: 22
+      - end: 63
+        start: 51
+      path: src/packaging/_structures.py
+    id: bug-1
+    must_mention:
+    - same sentinel
+    summary: InfinityType.__le__ always returned False and __gt__ always True, and
+      equality used isinstance rather than object identity, so a sentinel did not
+      compare equal-or-ordered to itself. Each comparison with the same object must
+      follow identity.
+id: packaging_infinity_self_comparison_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-03-08'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Infinity sentinels compare as unordered against themselves
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

@@ -1,0 +1,42 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: more_itertools_numeric_range_reversed_empty_001
+  title: Reversing an empty numeric_range raises IndexError
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: numeric_range.__reversed__ always indexed the last element to build
+    the reversed span, so an empty range raised IndexError instead of yielding no
+    values.
+source_paths:
+- more_itertools
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: __reversed__ called _get_by_index(-1) unconditionally, which raises on
+      an empty range. An empty numeric_range must reverse to an empty iterator.
+    files:
+    - path: more_itertools/more.py
+      line_ranges:
+      - start: 2406
+        end: 2408
+    concepts:
+    - reverse iteration
+    - vacuous span
+    must_mention:
+    - empty numeric span
+    acceptable_fix_keywords:
+    - guard the last index
+execution:
+  run_tests: true
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

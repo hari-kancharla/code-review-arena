@@ -1,0 +1,44 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: more_itertools_last_reversed_none_001
+  title: last() crashes when __reversed__ is None
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: last() used hasattr to decide whether to call reversed(), so an object
+    that sets __reversed__ = None (the pathlib.Path pattern) still entered that branch
+    and TypeError'd.
+source_paths:
+- more_itertools
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: hasattr is true when __reversed__ exists even if its value is None, so
+      last() called reversed() on objects that explicitly disable reverse iteration
+      and crashed.
+    files:
+    - path: more_itertools/more.py
+      line_ranges:
+      - start: 286
+        end: 286
+    concepts:
+    - disabled reversed
+    - presence versus truth
+    must_mention:
+    - disabled reverse
+    acceptable_fix_keywords:
+    - getattr None
+    - truthy reversed
+execution:
+  run_tests: true
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

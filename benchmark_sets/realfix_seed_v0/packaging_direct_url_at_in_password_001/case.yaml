@@ -1,0 +1,65 @@
+category: security
+description: Stripping userinfo from a direct URL netloc used split on the first at-sign,
+  so a password that itself contained '@' left part of the secret in the published
+  URL.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_direct_url.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - rightmost separator
+    concepts:
+    - userinfo stripping
+    - netloc split
+    files:
+    - line_ranges:
+      - end: 86
+        start: 86
+      path: src/packaging/direct_url.py
+    id: bug-1
+    must_mention:
+    - first at-sign
+    summary: _strip_auth_from_netloc split the netloc on the first '@', so a password
+      containing that character was only partially removed and the remainder stayed
+      in the URL that DirectUrl.to_dict publishes.
+id: packaging_direct_url_at_in_password_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-06-05'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Direct URL auth stripping splits on the first at-sign
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

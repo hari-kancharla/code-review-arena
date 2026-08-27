@@ -1,0 +1,33 @@
+source_label: more-itertools/more-itertools
+repository_url: https://github.com/more-itertools/more-itertools
+license: MIT
+license_url: https://github.com/more-itertools/more-itertools/blob/9245cd04c043d0d646497934df72549943d5f868/LICENSE
+buggy_commit: 6793bd3e4ed15318746ed2511733f12a9932eb64
+fixed_commit: 9245cd04c043d0d646497934df72549943d5f868
+fixed_date: '2022-11-22'
+issue_url: https://github.com/more-itertools/more-itertools/issues/658
+pull_request_url: https://github.com/more-itertools/more-itertools/issues/658
+source_selectors:
+- more_itertools
+tests_root: tests
+changed_source_paths:
+- more_itertools/more.py
+changed_test_paths:
+- tests/test_more.py
+changed_source_line_count: 4
+category: correctness
+evidence_summary: Upstream https://github.com/more-itertools/more-itertools/issues/658 (split_after
+  yields an empty remainder at maxsplit) is a historical repair whose parent is the buggy
+  tree. The added or rewritten regression coverage in tests/test_more.py fails on that parent
+  and passes at the fix.
+why_buggy_behavior_is_wrong: When maxsplit reached one, split_after always yielded the rest
+  of the iterable, including when nothing remained, so a split that consumed the input produced
+  a trailing empty chunk.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_more.py -q` (`tests/test_more.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (more_itertools/more.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: At the last allowed split, split_after
+  yielded list(it) even when that list was empty, so a remainder-less input produced a trailing
+  empty chunk. The added tests pin that defective behaviour.'
+admission_status: accepted

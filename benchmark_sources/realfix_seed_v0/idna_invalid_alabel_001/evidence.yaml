@@ -1,0 +1,32 @@
+source_label: kjd/idna
+repository_url: https://github.com/kjd/idna
+license: BSD-3-Clause
+license_url: https://github.com/kjd/idna/blob/4fdcc18d1eb214b35e16c372e8682fb8b8a52e11/LICENSE.md
+buggy_commit: c3383c97b3fffd8aa73aaefd16baf9c6da1e9f4e
+fixed_commit: 4fdcc18d1eb214b35e16c372e8682fb8b8a52e11
+fixed_date: '2021-10-03'
+issue_url: https://github.com/kjd/idna/issues/109
+pull_request_url: https://github.com/kjd/idna/issues/109
+source_selectors:
+- idna
+tests_root: tests
+changed_source_paths:
+- idna/core.py
+changed_test_paths:
+- tests/test_idna.py
+changed_source_line_count: 5
+category: correctness
+evidence_summary: Upstream https://github.com/kjd/idna/issues/109 (Invalid punycode A-label
+  leaks UnicodeError) is a historical repair whose parent is the buggy tree. The added or
+  rewritten regression coverage in tests/test_idna.py fails on that parent and passes at the
+  fix.
+why_buggy_behavior_is_wrong: ulabel decoded a candidate A-label with punycode and let UnicodeError
+  escape, instead of reporting the documented IDNAError for a malformed A-label.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_idna.py -q` (`tests/test_idna.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (idna/core.py in the after/ tree)
+  is exactly the hunk the historical fix rewrites: Punycode decoding of an A-label was uncaught,
+  so a malformed label raised UnicodeError rather than IDNAError. The added tests pin that
+  defective behaviour.'
+admission_status: accepted

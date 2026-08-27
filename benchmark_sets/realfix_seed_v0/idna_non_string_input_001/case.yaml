@@ -1,0 +1,67 @@
+category: correctness
+description: idna.encode and idna.decode caught only UnicodeDecodeError when coercing
+  a non-str argument, so values such as int or None raised a raw TypeError from str(...,
+  'ascii') instead of the documented IDNAError.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_idna.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - wrap the coercion
+    concepts:
+    - exception wrapping
+    - coercion failure
+    files:
+    - line_ranges:
+      - end: 379
+        start: 379
+      - end: 418
+        start: 414
+      path: idna/core.py
+    id: bug-1
+    must_mention:
+    - raw TypeError
+    summary: The coercion of a non-str argument caught UnicodeDecodeError only, so
+      TypeError from str(..., 'ascii') escaped. Both encode and decode must wrap that
+      failure as IDNAError.
+id: idna_non_string_input_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-05-05'
+  public_fix_date_basis: git_author_date
+  source_label: kjd/idna
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: encode and decode leak TypeError for non-bytes-like input
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

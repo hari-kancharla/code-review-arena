@@ -1,0 +1,33 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/ba17fcea2367a70cba21d6bfb0931ae476ee8583/LICENSE
+buggy_commit: 283811bffee5da95bda6d5332cb88f8b231187a2
+fixed_commit: ba17fcea2367a70cba21d6bfb0931ae476ee8583
+fixed_date: '2026-06-08'
+issue_url: https://github.com/pypa/packaging/pull/1230
+pull_request_url: https://github.com/pypa/packaging/pull/1230
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/utils.py
+changed_test_paths:
+- tests/test_utils.py
+changed_source_line_count: 2
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/1230 (is_normalized_name
+  accepts collapsed double hyphens) is a historical repair whose parent is the buggy tree.
+  The added or rewritten regression coverage in tests/test_utils.py fails on that parent and
+  passes at the fix.
+why_buggy_behavior_is_wrong: The normalized-name pattern used a negative lookahead that failed
+  to reject a name such as a--b, so is_normalized_name returned true for a spelling that canonicalize_name
+  would still rewrite.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_utils.py -q` (`tests/test_utils.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/utils.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: The normalized-name regular expression
+  used a negative lookahead that still matched names containing adjacent hyphens, so is_normalized_name
+  accepted spellings that are not canonical. The added tests pin that defective behaviour.'
+admission_status: accepted

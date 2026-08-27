@@ -1,0 +1,32 @@
+source_label: more-itertools/more-itertools
+repository_url: https://github.com/more-itertools/more-itertools
+license: MIT
+license_url: https://github.com/more-itertools/more-itertools/blob/49a4b3c94b0d71cc4576df3df9ca90197b5ec9fc/LICENSE
+buggy_commit: c0780fbbba9655d36de09b872981ffd4a90eb120
+fixed_commit: 49a4b3c94b0d71cc4576df3df9ca90197b5ec9fc
+fixed_date: '2021-08-01'
+issue_url: https://github.com/more-itertools/more-itertools/commit/49a4b3c94b0d71cc4576df3df9ca90197b5ec9fc
+pull_request_url: https://github.com/more-itertools/more-itertools/commit/49a4b3c94b0d71cc4576df3df9ca90197b5ec9fc
+source_selectors:
+- more_itertools
+tests_root: tests
+changed_source_paths:
+- more_itertools/more.py
+changed_test_paths:
+- tests/test_more.py
+changed_source_line_count: 3
+category: correctness
+evidence_summary: Upstream https://github.com/more-itertools/more-itertools/commit/49a4b3c94b0d71cc4576df3df9ca90197b5ec9fc
+  (chunked_even online buffer size is too small) is a historical repair whose parent is the
+  buggy tree. The added or rewritten regression coverage in tests/test_more.py fails on that
+  parent and passes at the fix.
+why_buggy_behavior_is_wrong: The online path of chunked_even sized its lookahead buffer as
+  n*(n-1)-1, which is too small for some n and produced uneven chunks from a streaming iterable.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_more.py -q` (`tests/test_more.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (more_itertools/more.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: _chunked_even_online used maxbuf
+  = n*(n-1)-1, which does not buffer enough elements to keep chunk lengths even for every
+  n. The added tests pin that defective behaviour.'
+admission_status: accepted

@@ -1,0 +1,42 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: tomli_text_mode_load_001
+  title: load on a text-mode file raises AttributeError
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: tomli.load called .decode() on the result of fp.read(), so a file opened
+    in text mode raised AttributeError instead of a TypeError telling the caller to
+    use binary mode.
+source_paths:
+- src/tomli
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: load decoded fp.read() without checking that the result was bytes, so
+      a text-mode file raised AttributeError from str.decode.
+    files:
+    - path: src/tomli/_parser.py
+      line_ranges:
+      - start: 77
+        end: 77
+    concepts:
+    - file mode
+    - text handle
+    must_mention:
+    - text-mode file
+    acceptable_fix_keywords:
+    - friendly type error
+execution:
+  run_tests: true
+  test_command: pytest tests/test_misc.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

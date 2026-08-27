@@ -1,0 +1,47 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: packaging_infinity_self_comparison_001
+  title: Infinity sentinels compare as unordered against themselves
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: InfinityType and NegativeInfinityType implemented ordering against
+    every other object, including the same sentinel, so Infinity < Infinity was true
+    and Infinity <= Infinity was false. A total order over the version sentinels must
+    treat a sentinel as equal to itself.
+source_paths:
+- src/packaging
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: InfinityType.__le__ always returned False and __gt__ always True, and
+      equality used isinstance rather than object identity, so a sentinel did not
+      compare equal-or-ordered to itself. Each comparison with the same object must
+      follow identity.
+    files:
+    - path: src/packaging/_structures.py
+      line_ranges:
+      - start: 22
+        end: 28
+      - start: 51
+        end: 63
+    concepts:
+    - sentinel identity
+    - total order
+    must_mention:
+    - same sentinel
+    acceptable_fix_keywords:
+    - identity check
+execution:
+  run_tests: true
+  test_command: pytest tests/test_structures.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

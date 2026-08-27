@@ -1,0 +1,34 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/84833cc16be84bc7f1d9f64e2818afe0dd48aade/LICENSE
+buggy_commit: fb82782df51f9a33bf9d2a489361a3784bb739ff
+fixed_commit: 84833cc16be84bc7f1d9f64e2818afe0dd48aade
+fixed_date: '2026-06-29'
+issue_url: https://github.com/pypa/packaging/pull/1305
+pull_request_url: https://github.com/pypa/packaging/pull/1305
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/utils.py
+changed_test_paths:
+- tests/test_utils.py
+changed_source_line_count: 16
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/1305 (Wheel and sdist parsers
+  accept an empty project name) is a historical repair whose parent is the buggy tree. The
+  added or rewritten regression coverage in tests/test_utils.py fails on that parent and passes
+  at the fix.
+why_buggy_behavior_is_wrong: The wheel project-name pattern used a star quantifier and the
+  sdist parser never checked the name side of the last dash, so filenames such as -1.0-py3-none-any.whl
+  and -1.0.tar.gz parsed as a nameless distribution instead of being rejected.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_utils.py -q` (`tests/test_utils.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/utils.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: The wheel name pattern allowed zero
+  characters and parse_sdist_filename did not reject an empty name_part after rpartition,
+  so a leading dash was accepted as a distribution with no project name. The added tests pin
+  that defective behaviour.'
+admission_status: accepted

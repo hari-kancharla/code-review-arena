@@ -1,0 +1,43 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: installer_unbound_executable_001
+  title: Additional metadata files inherit another file's executable bit
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: When writing extra metadata during wheel install, the destination was
+    given the leftover is_executable flag from a previously written file instead of
+    a non-executable default, so a text metadata file could be marked executable.
+source_paths:
+- src/installer
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: write_file for additional metadata reused the is_executable local from
+      an earlier record instead of passing False, so extra dist-info files inherited
+      another entry's executable bit.
+    files:
+    - path: src/installer/_core.py
+      line_ranges:
+      - start: 126
+        end: 126
+    concepts:
+    - stale flag
+    - executable bit
+    must_mention:
+    - leftover flag
+    acceptable_fix_keywords:
+    - non-executable
+execution:
+  run_tests: true
+  test_command: pytest tests/test_core.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

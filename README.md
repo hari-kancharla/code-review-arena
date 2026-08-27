@@ -86,9 +86,13 @@ arena run benchmark_sets/realfix_seed_v0 --reviewer <spec> --mode full \
 Cases then split into `pre_cutoff` / `post_cutoff` / `undetermined` /
 `not_applicable`, stamped per case so anyone can recompute the analysis from a stored
 run. An undated case is never imputed into a cohort, and the difference between the
-cohorts is withheld unless the comparison is actually powered — on today's five-case
-seed it is withheld, and the published `min_detectable_gap` of 1.0 says why. Exposure
-is disclosure and never leaderboard eligibility.
+cohorts is withheld unless the comparison is actually powered. On the 24-case RealFix
+pack, a `2025-12-01` cutoff with a 90-day guard yields 11 `pre_cutoff` and 10
+`post_cutoff` cases, so cohort-size suppression no longer fires, and
+`min_detectable_gap` falls from 1.0 to 0.470. That is still an enormous detectable
+difference: the pack can support only coarse exposure disclosure, not model ranking.
+The gap remains unpublished by default because reviewer retrieval is `unknown`.
+Exposure is disclosure and never leaderboard eligibility.
 
 Full treatment, including what this deliberately does **not** claim:
 [docs/training-data-exposure.md](docs/training-data-exposure.md).
@@ -109,9 +113,11 @@ arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unveri
 
 Five packs ship today. `benchmark_sets/v1` (nine cases) and `benchmark_sets/audit_v1` /
 `benchmark_sets/audit_v2` (ten each) are authored calibration and audit packs;
-`benchmark_sets/realfix_seed_v0` is a five-case methodology seed derived from
-historical fixes that executes only through its pinned Docker image (see the
-Reference section). For the commands above, swap in `audit_v1` or `audit_v2`; both
+`benchmark_sets/realfix_seed_v0` is a 24-case historical-fix pack derived from
+public repairs that executes only through its pinned Docker image (see the
+Reference section). It is large enough for coarse exposure-cohort disclosure
+(`min_detectable_gap` 0.470 at a 2025-12-01 cutoff) and still too small to rank
+models. For the commands above, swap in `audit_v1` or `audit_v2`; both
 are patch-backed and runnable with `--allow-local-execution`.
 `benchmark_sets/integrity_pilot_v0` belongs to a separate track with its own
 commands (see below).
@@ -230,18 +236,19 @@ Benchmark packs:
 | `benchmark_sets/v1` | 9 | Authored baseline cases | review scoring + validation |
 | `benchmark_sets/audit_v1` | 10 | Authored patch-required audit cases | patch apply + tests + validators |
 | `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests |
-| `benchmark_sets/realfix_seed_v0` | 5 | Historical-fix methodology seed | Docker-backed patch apply + tests |
+| `benchmark_sets/realfix_seed_v0` | 24 | Historical-fix pack (coarse exposure disclosure only) | Docker-backed patch apply + tests |
 | `benchmark_sets/integrity_pilot_v0` | 8 pairs | Validation-integrity review (separate track) | visible CI + hidden trusted oracle |
 
-The first three packs are authored calibration and audit packs. The RealFix seed
+The first three packs are authored calibration and audit packs. The RealFix
 cases are synthetic reverse-review presentations derived from real historical fixes
-in attrs, click, packaging, and rich (upstream licenses and notices ship inside the
-pack): the review diff is the inverse of the historical fix, not necessarily an
-original bug-introducing pull request. Five cases demonstrate the
-ingestion-to-certification methodology end to end; they support no conclusions about
-model performance. Candidate fixes are found with `arena mine-fixes` and turned into
-packs with `arena import-fix`
-([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)). The seed
+in attrs, click, packaging, rich, installer, more-itertools, idna, and tomli
+(upstream licenses and notices ship inside the pack): the review diff is the inverse
+of the historical fix, not necessarily an original bug-introducing pull request.
+Twenty-four certified cases are enough that `min_detectable_gap` is no longer 1.0
+(0.470 at a 2025-12-01 cutoff with a 90-day guard: 11 pre, 10 post) and still far
+too coarse to rank models. Candidate fixes are found with `arena mine-fixes` and
+turned into packs with `arena import-fix`
+([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)). The pack
 executes only in its pinned image; build it first with
 `bash docker/realfix_seed/build.sh`.
 
@@ -297,14 +304,14 @@ authoring, and the audit report.
 
 ## Limitations
 
-- The packs are curated and small (34 cases across `v1`, `audit_v1`, `audit_v2`,
-  and the five-case `realfix_seed_v0` seed, plus eight integrity pairs).
+- The packs are curated and small (53 cases across `v1`, `audit_v1`, `audit_v2`,
+  and the 24-case `realfix_seed_v0` pack, plus eight integrity pairs).
 - The integrity pilot's compromised pull requests are authored. They establish the
   evaluation abstraction; they say nothing about how often coding agents produce
   this failure in practice, and eight pairs cannot rank reviewers.
-- RealFix seed cases are synthetic reverse-review presentations of historical fixes,
-  not necessarily original bug-introducing pull requests; the five-case seed
-  demonstrates methodology and supports no model-performance conclusions.
+- RealFix cases are synthetic reverse-review presentations of historical fixes,
+  not necessarily original bug-introducing pull requests; 24 certified cases
+  lower `min_detectable_gap` from 1.0 to 0.470 and still cannot rank models.
 - Concept matching is lexical (curated keywords), not semantic; well-paraphrased
   findings can be under-credited. Execution metrics do not have this problem.
 - Structural validators are comment-stripped heuristics: hand-authored, may reject

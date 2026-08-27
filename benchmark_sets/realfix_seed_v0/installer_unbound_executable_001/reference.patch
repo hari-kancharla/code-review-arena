@@ -1,0 +1,13 @@
+diff --git a/src/installer/_core.py b/src/installer/_core.py
+index cf2a808292c31783e3bb14ae5b4db742a293573f..9a02728f61241b8c60fa60fa644b40b987f4f308 100644
+--- a/src/installer/_core.py
++++ b/src/installer/_core.py
+@@ -123,7 +123,7 @@ def install(
+                 scheme=root_scheme,
+                 path=path,
+                 stream=other_stream,
+-                is_executable=is_executable,
++                is_executable=False,
+             )
+         written_records.append((root_scheme, record))
+ 

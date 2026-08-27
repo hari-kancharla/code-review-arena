@@ -1,0 +1,34 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/2680259b4fa88885962e1b6f1cca9d92a3e605ca/LICENSE
+buggy_commit: f89652be562e2acd45d4def18977fd9057937c38
+fixed_commit: 2680259b4fa88885962e1b6f1cca9d92a3e605ca
+fixed_date: '2025-05-22'
+issue_url: https://github.com/pypa/packaging/pull/879
+pull_request_url: https://github.com/pypa/packaging/pull/879
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/licenses/__init__.py
+changed_test_paths:
+- tests/test_metadata.py
+changed_source_line_count: 17
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/879 (Empty parentheses are
+  accepted as a license expression) is a historical repair whose parent is the buggy tree.
+  The added or rewritten regression coverage in tests/test_metadata.py fails on that parent
+  and passes at the fix.
+why_buggy_behavior_is_wrong: canonicalize_license_expression translated tokens into a Python
+  expression and evaluated it, so the empty group '()' evaluated as valid instead of being
+  rejected as an invalid license expression.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_metadata.py -q` (`tests/test_metadata.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/licenses/__init__.py
+  in the after/ tree) is exactly the hunk the historical fix rewrites: Empty parenthesis pairs
+  were not detected, and the translated expression was eval''d rather than compiled, so ''()''
+  produced a successful empty evaluation instead of InvalidLicenseExpression. The added tests
+  pin that defective behaviour.'
+admission_status: accepted

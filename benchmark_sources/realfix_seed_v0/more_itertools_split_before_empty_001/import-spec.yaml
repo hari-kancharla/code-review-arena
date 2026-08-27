@@ -1,0 +1,41 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: more_itertools_split_before_empty_001
+  title: split_before yields an empty chunk for an empty input
+  category: correctness
+  severity: low
+  stack:
+  - python
+  description: split_before always yielded its leftover buffer after the loop, so
+    an empty iterable produced one empty list instead of no chunks.
+source_paths:
+- more_itertools
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: After consuming the iterable, split_before yielded the buffer even when
+      it was empty, so an empty input produced a single empty chunk.
+    files:
+    - path: more_itertools/more.py
+      line_ranges:
+      - start: 1238
+        end: 1238
+    concepts:
+    - empty input
+    - leftover buffer
+    must_mention:
+    - empty chunk
+    acceptable_fix_keywords:
+    - yield only if nonempty
+execution:
+  run_tests: true
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

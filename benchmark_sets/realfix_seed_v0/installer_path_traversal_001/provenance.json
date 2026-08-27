@@ -1,0 +1,78 @@
+{
+  "buggy_commit": "504fa8f980641c82868af834f5d30b485ad8a902",
+  "buggy_commit_committer_date": "2026-03-28T15:15:37+00:00",
+  "buggy_source_files": [
+    "src/installer/__init__.py",
+    "src/installer/__main__.py",
+    "src/installer/_core.py",
+    "src/installer/_scripts/__init__.py",
+    "src/installer/_scripts/t32.exe",
+    "src/installer/_scripts/t64-arm.exe",
+    "src/installer/_scripts/t64.exe",
+    "src/installer/_scripts/t_arm.exe",
+    "src/installer/_scripts/w32.exe",
+    "src/installer/_scripts/w64-arm.exe",
+    "src/installer/_scripts/w64.exe",
+    "src/installer/_scripts/w_arm.exe",
+    "src/installer/destinations.py",
+    "src/installer/exceptions.py",
+    "src/installer/py.typed",
+    "src/installer/records.py",
+    "src/installer/scripts.py",
+    "src/installer/sources.py",
+    "src/installer/utils.py"
+  ],
+  "changed_source_paths": [
+    "src/installer/destinations.py"
+  ],
+  "changed_test_paths": [
+    "tests/test_destinations.py"
+  ],
+  "diff_policy_version": "1",
+  "fixed_commit": "2eccd66b344de24ee7acc6fc01741a8aa2713f05",
+  "fixed_commit_author_date": "2026-03-28T15:29:02+00:00",
+  "fixed_commit_committer_date": "2026-03-28T15:29:02+00:00",
+  "fixed_source_files": [
+    "src/installer/__init__.py",
+    "src/installer/__main__.py",
+    "src/installer/_core.py",
+    "src/installer/_scripts/__init__.py",
+    "src/installer/_scripts/t32.exe",
+    "src/installer/_scripts/t64-arm.exe",
+    "src/installer/_scripts/t64.exe",
+    "src/installer/_scripts/t_arm.exe",
+    "src/installer/_scripts/w32.exe",
+    "src/installer/_scripts/w64-arm.exe",
+    "src/installer/_scripts/w64.exe",
+    "src/installer/_scripts/w_arm.exe",
+    "src/installer/destinations.py",
+    "src/installer/exceptions.py",
+    "src/installer/py.typed",
+    "src/installer/records.py",
+    "src/installer/scripts.py",
+    "src/installer/sources.py",
+    "src/installer/utils.py"
+  ],
+  "fixed_test_files": [
+    "conftest.py",
+    "requirements.txt",
+    "test_core.py",
+    "test_destinations.py",
+    "test_main.py",
+    "test_records.py",
+    "test_scripts.py",
+    "test_sources.py",
+    "test_utils.py"
+  ],
+  "merge_base": "504fa8f980641c82868af834f5d30b485ad8a902",
+  "mode": "reverse_fix",
+  "object_format": "sha1",
+  "pr_diff_sha256": "c72d1a51a4925921633ffebdf0ca97ccc89626948a4cbe442ed3056c8afa0429",
+  "provenance_schema_version": "3",
+  "reference_patch_sha256": "faaf6933fba069bf3ac127ff830e3fb212320c69a7a607ac80ef6bd504274d84",
+  "source_label": "pypa/installer",
+  "source_paths": [
+    "src/installer"
+  ],
+  "tests_root": "tests"
+}

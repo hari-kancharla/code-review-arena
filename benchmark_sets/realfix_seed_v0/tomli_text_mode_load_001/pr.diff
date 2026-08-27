@@ -1,0 +1,19 @@
+diff --git a/src/tomli/_parser.py b/src/tomli/_parser.py
+index c0001968587979f7a2ac190089e82d91dbc1220f..0bbe89a966159f812cecd2215a357e7be9dd4707 100644
+--- a/src/tomli/_parser.py
++++ b/src/tomli/_parser.py
+@@ -74,13 +74,7 @@ class TOMLDecodeError(ValueError):
+ 
+ def load(__fp: BinaryIO, *, parse_float: ParseFloat = float) -> dict[str, Any]:
+     """Parse TOML from a binary file object."""
+-    b = __fp.read()
+-    try:
+-        s = b.decode()
+-    except AttributeError:
+-        raise TypeError(
+-            "File must be opened in binary mode, e.g. use `open('foo.toml', 'rb')`"
+-        ) from None
++    s = __fp.read().decode()
+     return loads(s, parse_float=parse_float)
+ 
+ 

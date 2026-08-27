@@ -1,0 +1,57 @@
+{
+  "buggy_commit": "522c0ebe02d8bd09039dd593e7c152ab5a1d26dd",
+  "buggy_commit_committer_date": "2021-10-12T23:30:02+00:00",
+  "buggy_source_files": [
+    "idna/__init__.py",
+    "idna/codec.py",
+    "idna/compat.py",
+    "idna/core.py",
+    "idna/idnadata.py",
+    "idna/intranges.py",
+    "idna/package_data.py",
+    "idna/py.typed",
+    "idna/uts46data.py"
+  ],
+  "changed_source_paths": [
+    "idna/core.py"
+  ],
+  "changed_test_paths": [
+    "tests/test_idna.py"
+  ],
+  "diff_policy_version": "1",
+  "fixed_commit": "e00ed2854c5203be201940f4029a747684594409",
+  "fixed_commit_author_date": "2022-04-27T14:15:17+00:00",
+  "fixed_commit_committer_date": "2022-04-27T14:15:17+00:00",
+  "fixed_source_files": [
+    "idna/__init__.py",
+    "idna/codec.py",
+    "idna/compat.py",
+    "idna/core.py",
+    "idna/idnadata.py",
+    "idna/intranges.py",
+    "idna/package_data.py",
+    "idna/py.typed",
+    "idna/uts46data.py"
+  ],
+  "fixed_test_files": [
+    "IdnaTestV2.txt",
+    "__init__.py",
+    "test_idna.py",
+    "test_idna_codec.py",
+    "test_idna_compat.py",
+    "test_idna_other.py",
+    "test_idna_uts46.py",
+    "test_intranges.py"
+  ],
+  "merge_base": "522c0ebe02d8bd09039dd593e7c152ab5a1d26dd",
+  "mode": "reverse_fix",
+  "object_format": "sha1",
+  "pr_diff_sha256": "fdfbbe407b31fd8e9896092d1df344a0941ae65c92693f0bbbf60f8908639b16",
+  "provenance_schema_version": "3",
+  "reference_patch_sha256": "677908677b20a9153fd12ce4cb394b94a7bd73d964cddf1ff587f9ab7dc36031",
+  "source_label": "kjd/idna",
+  "source_paths": [
+    "idna"
+  ],
+  "tests_root": "tests"
+}

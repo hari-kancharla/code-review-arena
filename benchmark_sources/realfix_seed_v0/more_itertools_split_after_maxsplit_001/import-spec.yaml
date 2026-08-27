@@ -1,0 +1,42 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: more_itertools_split_after_maxsplit_001
+  title: split_after yields an empty remainder at maxsplit
+  category: correctness
+  severity: low
+  stack:
+  - python
+  description: When maxsplit reached one, split_after always yielded the rest of the
+    iterable, including when nothing remained, so a split that consumed the input
+    produced a trailing empty chunk.
+source_paths:
+- more_itertools
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: At the last allowed split, split_after yielded list(it) even when that
+      list was empty, so a remainder-less input produced a trailing empty chunk.
+    files:
+    - path: more_itertools/more.py
+      line_ranges:
+      - start: 1394
+        end: 1394
+    concepts:
+    - last split
+    - trailing remainder
+    must_mention:
+    - trailing empty chunk
+    acceptable_fix_keywords:
+    - yield only if nonempty
+execution:
+  run_tests: true
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

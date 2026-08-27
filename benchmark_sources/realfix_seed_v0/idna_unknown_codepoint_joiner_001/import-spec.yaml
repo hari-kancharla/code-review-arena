@@ -1,0 +1,42 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: idna_unknown_codepoint_joiner_001
+  title: Unknown codepoint next to a joiner leaks ValueError
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: check_label asked valid_contextj whether a CONTEXTJ codepoint was allowed,
+    and that helper raised ValueError when an adjacent codepoint was missing from
+    Unicode data, so encode/decode leaked ValueError instead of IDNAError.
+source_paths:
+- idna
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: valid_contextj raised ValueError for a codepoint absent from Unicode
+      data. That failure escaped check_label instead of becoming IDNAError.
+    files:
+    - path: idna/core.py
+      line_ranges:
+      - start: 243
+        end: 244
+    concepts:
+    - missing Unicode data
+    - CONTEXTJ neighbour
+    must_mention:
+    - absent from Unicode data
+    acceptable_fix_keywords:
+    - wrap ValueError
+execution:
+  run_tests: true
+  test_command: pytest tests/test_idna.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

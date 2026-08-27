@@ -136,8 +136,10 @@ otherwise.
 Cohort counts, cohort rates with Wilson intervals, the reason census, the
 repository × cohort cross-tab and `min_detectable_gap` are published **either
 way**. `min_detectable_gap` is the number that states the cohort sizes' resolving
-power before a reader has to work it out: on today's five-case seed it is `1.0`,
-meaning nothing short of the entire range would be detectable.
+power before a reader has to work it out: on the 24-case RealFix pack, with
+cutoff `2025-12-01` and a 90-day guard (11 pre, 10 post), it is `0.470`, down
+from `1.0` on the five-case seed. That is still an enormous detectable
+difference — coarse exposure disclosure, not a ranking result.
 
 ## What this is not
 

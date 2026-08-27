@@ -1,0 +1,44 @@
+diff --git a/src/packaging/_structures.py b/src/packaging/_structures.py
+index 74ca8f0c051a4f71badf287a75e9c11c348c0495..225e2eee01238571c50595eb104e0b70d5f503c4 100644
+--- a/src/packaging/_structures.py
++++ b/src/packaging/_structures.py
+@@ -19,13 +19,13 @@ class InfinityType:
+         return False
+ 
+     def __le__(self, other: object) -> bool:
+-        return other is self
++        return False
+ 
+     def __eq__(self, other: object) -> bool:
+-        return other is self
++        return isinstance(other, self.__class__)
+ 
+     def __gt__(self, other: object) -> bool:
+-        return other is not self
++        return True
+ 
+     def __ge__(self, other: object) -> bool:
+         return True
+@@ -48,19 +48,19 @@ class NegativeInfinityType:
+         return hash(repr(self))
+ 
+     def __lt__(self, other: object) -> bool:
+-        return other is not self
++        return True
+ 
+     def __le__(self, other: object) -> bool:
+         return True
+ 
+     def __eq__(self, other: object) -> bool:
+-        return other is self
++        return isinstance(other, self.__class__)
+ 
+     def __gt__(self, other: object) -> bool:
+         return False
+ 
+     def __ge__(self, other: object) -> bool:
+-        return other is self
++        return False
+ 
+     def __neg__(self: object) -> InfinityType:
+         return Infinity

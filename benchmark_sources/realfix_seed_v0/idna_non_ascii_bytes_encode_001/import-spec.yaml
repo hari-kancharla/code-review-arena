@@ -1,0 +1,42 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: idna_non_ascii_bytes_encode_001
+  title: encode on non-ASCII bytes leaks UnicodeDecodeError
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: idna.encode decoded a bytes argument with ascii and let UnicodeDecodeError
+    escape, so a non-ASCII byte string raised a raw codec error instead of the documented
+    IDNAError.
+source_paths:
+- idna
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: encode called bytes.decode('ascii') without catching UnicodeDecodeError,
+      so a byte string that was not ASCII escaped as a codec error rather than IDNAError.
+    files:
+    - path: idna/core.py
+      line_ranges:
+      - start: 342
+        end: 342
+    concepts:
+    - bytes argument
+    - codec failure
+    must_mention:
+    - raw codec error
+    acceptable_fix_keywords:
+    - wrap the decode
+execution:
+  run_tests: true
+  test_command: pytest tests/test_idna.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

@@ -1,0 +1,67 @@
+category: security
+description: SchemeDictionaryDestination joined a scheme directory with a caller-supplied
+  relative path and wrote there with no containment check, so a path containing parent-directory
+  segments could escape the intended install root.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_destinations.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - containment check
+    - resolved location
+    concepts:
+    - path containment
+    - install root
+    files:
+    - line_ranges:
+      - end: 139
+        start: 139
+      path: src/installer/destinations.py
+    id: bug-1
+    must_mention:
+    - parent-directory segments
+    summary: The destination path was formed by joining the scheme directory with
+      the requested relative path and never verified that the resolved location still
+      sat inside that directory, so parent-directory segments escaped the install
+      root.
+id: installer_path_traversal_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-03-28'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/installer
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: high
+stack:
+- python
+title: Wheel destination joins paths without containing them
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

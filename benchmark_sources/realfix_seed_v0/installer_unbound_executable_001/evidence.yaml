@@ -1,0 +1,34 @@
+source_label: pypa/installer
+repository_url: https://github.com/pypa/installer
+license: MIT
+license_url: https://github.com/pypa/installer/blob/6c3118d04e9a279f8f5b972ba797387451c7a6b4/LICENSE
+buggy_commit: de073ce0d45b9249e2b008df5ac391245e89a283
+fixed_commit: 6c3118d04e9a279f8f5b972ba797387451c7a6b4
+fixed_date: '2022-07-16'
+issue_url: https://github.com/pypa/installer/pull/115
+pull_request_url: https://github.com/pypa/installer/pull/115
+source_selectors:
+- src/installer
+tests_root: tests
+changed_source_paths:
+- src/installer/_core.py
+changed_test_paths:
+- tests/test_core.py
+changed_source_line_count: 2
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/installer/pull/115 (Additional metadata
+  files inherit another file's executable bit) is a historical repair whose parent is the
+  buggy tree. The added or rewritten regression coverage in tests/test_core.py fails on that
+  parent and passes at the fix.
+why_buggy_behavior_is_wrong: When writing extra metadata during wheel install, the destination
+  was given the leftover is_executable flag from a previously written file instead of a non-executable
+  default, so a text metadata file could be marked executable.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_core.py -q` (`tests/test_core.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/installer/_core.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: write_file for additional metadata
+  reused the is_executable local from an earlier record instead of passing False, so extra
+  dist-info files inherited another entry''s executable bit. The added tests pin that defective
+  behaviour.'
+admission_status: accepted

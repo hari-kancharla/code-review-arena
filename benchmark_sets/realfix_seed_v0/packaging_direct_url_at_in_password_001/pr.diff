@@ -1,0 +1,13 @@
+diff --git a/src/packaging/direct_url.py b/src/packaging/direct_url.py
+index 7c95d22c893f6893466bae21da6207d988126543..6f0789486add1c1635ca8d7c7545be358fb6216e 100644
+--- a/src/packaging/direct_url.py
++++ b/src/packaging/direct_url.py
+@@ -83,7 +83,7 @@ _PEP610_USER_PASS_ENV_VARS_REGEX = re.compile(
+ def _strip_auth_from_netloc(netloc: str, safe_user_passwords: Collection[str]) -> str:
+     if "@" not in netloc:
+         return netloc
+-    user_pass, netloc_no_user_pass = netloc.rsplit("@", 1)
++    user_pass, netloc_no_user_pass = netloc.split("@", 1)
+     if user_pass in safe_user_passwords:
+         return netloc
+     if _PEP610_USER_PASS_ENV_VARS_REGEX.match(user_pass):

@@ -1,0 +1,41 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: idna_invalid_alabel_001
+  title: Invalid punycode A-label leaks UnicodeError
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: ulabel decoded a candidate A-label with punycode and let UnicodeError
+    escape, instead of reporting the documented IDNAError for a malformed A-label.
+source_paths:
+- idna
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: Punycode decoding of an A-label was uncaught, so a malformed label raised
+      UnicodeError rather than IDNAError.
+    files:
+    - path: idna/core.py
+      line_ranges:
+      - start: 315
+        end: 315
+    concepts:
+    - punycode decode
+    - malformed label
+    must_mention:
+    - malformed label
+    acceptable_fix_keywords:
+    - wrap decode failure
+execution:
+  run_tests: true
+  test_command: pytest tests/test_idna.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

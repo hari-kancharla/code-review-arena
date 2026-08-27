@@ -1,0 +1,32 @@
+source_label: kjd/idna
+repository_url: https://github.com/kjd/idna
+license: BSD-3-Clause
+license_url: https://github.com/kjd/idna/blob/e00ed2854c5203be201940f4029a747684594409/LICENSE.md
+buggy_commit: 522c0ebe02d8bd09039dd593e7c152ab5a1d26dd
+fixed_commit: e00ed2854c5203be201940f4029a747684594409
+fixed_date: '2022-04-27'
+issue_url: https://github.com/kjd/idna/issues/119
+pull_request_url: https://github.com/kjd/idna/issues/119
+source_selectors:
+- idna
+tests_root: tests
+changed_source_paths:
+- idna/core.py
+changed_test_paths:
+- tests/test_idna.py
+changed_source_line_count: 5
+category: correctness
+evidence_summary: Upstream https://github.com/kjd/idna/issues/119 (encode on non-ASCII bytes
+  leaks UnicodeDecodeError) is a historical repair whose parent is the buggy tree. The added
+  or rewritten regression coverage in tests/test_idna.py fails on that parent and passes at
+  the fix.
+why_buggy_behavior_is_wrong: idna.encode decoded a bytes argument with ascii and let UnicodeDecodeError
+  escape, so a non-ASCII byte string raised a raw codec error instead of the documented IDNAError.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_idna.py -q` (`tests/test_idna.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (idna/core.py in the after/ tree)
+  is exactly the hunk the historical fix rewrites: encode called bytes.decode(''ascii'') without
+  catching UnicodeDecodeError, so a byte string that was not ASCII escaped as a codec error
+  rather than IDNAError. The added tests pin that defective behaviour.'
+admission_status: accepted

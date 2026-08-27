@@ -1,0 +1,45 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: installer_path_traversal_001
+  title: Wheel destination joins paths without containing them
+  category: security
+  severity: high
+  stack:
+  - python
+  description: SchemeDictionaryDestination joined a scheme directory with a caller-supplied
+    relative path and wrote there with no containment check, so a path containing
+    parent-directory segments could escape the intended install root.
+source_paths:
+- src/installer
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: The destination path was formed by joining the scheme directory with
+      the requested relative path and never verified that the resolved location still
+      sat inside that directory, so parent-directory segments escaped the install
+      root.
+    files:
+    - path: src/installer/destinations.py
+      line_ranges:
+      - start: 139
+        end: 139
+    concepts:
+    - path containment
+    - install root
+    must_mention:
+    - parent-directory segments
+    acceptable_fix_keywords:
+    - containment check
+    - resolved location
+execution:
+  run_tests: true
+  test_command: pytest tests/test_destinations.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

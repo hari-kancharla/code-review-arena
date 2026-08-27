@@ -1,0 +1,33 @@
+source_label: hukkin/tomli
+repository_url: https://github.com/hukkin/tomli
+license: MIT
+license_url: https://github.com/hukkin/tomli/blob/8b962e13490a569d4aab90076451def23ed6c6d8/LICENSE
+buggy_commit: e4da05c35a41a4d53fce7af292b94506b1ea68a7
+fixed_commit: 8b962e13490a569d4aab90076451def23ed6c6d8
+fixed_date: '2022-01-29'
+issue_url: https://github.com/hukkin/tomli/pull/175
+pull_request_url: https://github.com/hukkin/tomli/pull/175
+source_selectors:
+- src/tomli
+tests_root: tests
+changed_source_paths:
+- src/tomli/_parser.py
+changed_test_paths:
+- tests/test_misc.py
+changed_source_line_count: 8
+category: correctness
+evidence_summary: Upstream https://github.com/hukkin/tomli/pull/175 (load on a text-mode file
+  raises AttributeError) is a historical repair whose parent is the buggy tree. The added
+  or rewritten regression coverage in tests/test_misc.py fails on that parent and passes at
+  the fix.
+why_buggy_behavior_is_wrong: tomli.load called .decode() on the result of fp.read(), so a
+  file opened in text mode raised AttributeError instead of a TypeError telling the caller
+  to use binary mode.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_misc.py -q` (`tests/test_misc.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/tomli/_parser.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: load decoded fp.read() without checking
+  that the result was bytes, so a text-mode file raised AttributeError from str.decode. The
+  added tests pin that defective behaviour.'
+admission_status: accepted

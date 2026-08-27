@@ -1,0 +1,69 @@
+category: correctness
+description: The wheel project-name pattern used a star quantifier and the sdist parser
+  never checked the name side of the last dash, so filenames such as -1.0-py3-none-any.whl
+  and -1.0.tar.gz parsed as a nameless distribution instead of being rejected.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_utils.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - require a character
+    concepts:
+    - filename parsing
+    - empty name
+    files:
+    - line_ranges:
+      - end: 68
+        start: 68
+      - end: 213
+        start: 213
+      - end: 277
+        start: 277
+      path: src/packaging/utils.py
+    id: bug-1
+    must_mention:
+    - nameless distribution
+    summary: The wheel name pattern allowed zero characters and parse_sdist_filename
+      did not reject an empty name_part after rpartition, so a leading dash was accepted
+      as a distribution with no project name.
+id: packaging_empty_project_name_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-06-29'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Wheel and sdist parsers accept an empty project name
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

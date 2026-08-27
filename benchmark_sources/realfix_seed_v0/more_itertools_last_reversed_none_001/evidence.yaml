@@ -1,0 +1,33 @@
+source_label: more-itertools/more-itertools
+repository_url: https://github.com/more-itertools/more-itertools
+license: MIT
+license_url: https://github.com/more-itertools/more-itertools/blob/cca32949f12d473fd823e37a5530c30d2faa1332/LICENSE
+buggy_commit: c834d6e4a0c4280b7b7750cb0de8dd8acb3d4c2c
+fixed_commit: cca32949f12d473fd823e37a5530c30d2faa1332
+fixed_date: '2025-07-13'
+issue_url: https://github.com/more-itertools/more-itertools/issues/1001
+pull_request_url: https://github.com/more-itertools/more-itertools/issues/1001
+source_selectors:
+- more_itertools
+tests_root: tests
+changed_source_paths:
+- more_itertools/more.py
+changed_test_paths:
+- tests/test_more.py
+changed_source_line_count: 2
+category: correctness
+evidence_summary: Upstream https://github.com/more-itertools/more-itertools/issues/1001 (last()
+  crashes when __reversed__ is None) is a historical repair whose parent is the buggy tree.
+  The added or rewritten regression coverage in tests/test_more.py fails on that parent and
+  passes at the fix.
+why_buggy_behavior_is_wrong: last() used hasattr to decide whether to call reversed(), so
+  an object that sets __reversed__ = None (the pathlib.Path pattern) still entered that branch
+  and TypeError'd.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_more.py -q` (`tests/test_more.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (more_itertools/more.py in the after/
+  tree) is exactly the hunk the historical fix rewrites: hasattr is true when __reversed__
+  exists even if its value is None, so last() called reversed() on objects that explicitly
+  disable reverse iteration and crashed. The added tests pin that defective behaviour.'
+admission_status: accepted

@@ -5,6 +5,23 @@ Keep a Changelog conventions.
 
 ## Unreleased
 
+### Added
+
+- **RealFix grown from five certified cases to 24**, still through `arena mine-fixes`
+  and `arena import-fix`, without lowering the certification bar. Mining 32 local
+  clones produced 3747 clean candidates and 1168 fix-ish diffs of four files or
+  fewer. Nineteen new cases certified (fail-to-pass, mutant kill ≥ 0.5, pinned
+  `arena-realfix-seed:0` image); the original five seed cases are unchanged.
+  Hand-authored attempts that did not certify were rejected for contamination
+  vocabulary in the inverse diff, mutation kill below 0.5, Docker collect/run
+  failure (old `packaging/` layout, extra test deps), or unsafe fixture paths —
+  not by relaxing those gates. At cutoff `2025-12-01` with a 90-day guard the pack
+  splits 11 `pre_cutoff` / 10 `post_cutoff` / 3 undetermined, so
+  `min_detectable_gap` falls from 1.0 to 0.470. That is still an enormous
+  detectable difference: coarse exposure disclosure, not ranking power.
+  Provenance, licenses and notices for installer, more-itertools, idna and tomli
+  ship with the pack.
+
 ### Security
 
 - **A passing test run now requires machine-readable proof.** The verdict was the

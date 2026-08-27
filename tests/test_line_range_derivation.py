@@ -86,6 +86,22 @@ def _seed_cases():
 
 
 @pytest.mark.parametrize("case_dir", _seed_cases(), ids=lambda d: d.name)
+def test_every_realfix_case_is_dated_and_docker_isolated(case_dir):
+    """A RealFix case without a commit date or a pinned image cannot be a cohort member."""
+    spec = yaml.safe_load((case_dir / "case.yaml").read_text(encoding="utf-8"))
+    origin = spec["origin"]
+    assert origin["kind"] == "derived_public"
+    assert origin.get("public_fix_date")
+    assert origin["public_fix_date_basis"] in {
+        "git_author_date",
+        "git_committer_date",
+        "min_of_signals",
+        "declared",
+    }
+    assert spec["execution"]["docker_image"] == "arena-realfix-seed:0"
+
+
+@pytest.mark.parametrize("case_dir", _seed_cases(), ids=lambda d: d.name)
 def test_derivation_agrees_with_human_authored_ground_truth(case_dir):
     """The rule is validated against ground truth a human wrote from real fixes.
 

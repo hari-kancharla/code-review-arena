@@ -1,0 +1,20 @@
+diff --git a/src/installer/destinations.py b/src/installer/destinations.py
+index 2858c9b04d0dc56a94df34a73ef3e68d6fb6a6cd..f3f2f0985592bf15ab0ab7fb5f113e3a8f6d0434 100644
+--- a/src/installer/destinations.py
++++ b/src/installer/destinations.py
+@@ -136,14 +136,7 @@ class SchemeDictionaryDestination(WheelDestination):
+     """Silently overwrite existing files."""
+ 
+     def _path_with_destdir(self, scheme: Scheme, path: str) -> Path:
+-        target_dir = Path(self.scheme_dict[scheme]).resolve()
+-        file = (target_dir / path).resolve()
+-
+-        if not file.is_relative_to(target_dir):
+-            raise ValueError(
+-                f"Attempting to write {path} outside of the target directory"
+-            )
+-
++        file = Path(self.scheme_dict[scheme]) / path
+         if self.destdir is not None:
+             rel_path = file.relative_to(file.anchor)
+             return Path(self.destdir) / rel_path

@@ -1,0 +1,64 @@
+category: correctness
+description: When maxsplit reached one, split_after always yielded the rest of the
+  iterable, including when nothing remained, so a split that consumed the input produced
+  a trailing empty chunk.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - yield only if nonempty
+    concepts:
+    - last split
+    - trailing remainder
+    files:
+    - line_ranges:
+      - end: 1394
+        start: 1394
+      path: more_itertools/more.py
+    id: bug-1
+    must_mention:
+    - trailing empty chunk
+    summary: At the last allowed split, split_after yielded list(it) even when that
+      list was empty, so a remainder-less input produced a trailing empty chunk.
+id: more_itertools_split_after_maxsplit_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2022-11-22'
+  public_fix_date_basis: git_author_date
+  source_label: more-itertools/more-itertools
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: low
+stack:
+- python
+title: split_after yields an empty remainder at maxsplit
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

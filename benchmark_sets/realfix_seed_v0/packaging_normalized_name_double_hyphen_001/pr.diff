@@ -1,0 +1,13 @@
+diff --git a/src/packaging/utils.py b/src/packaging/utils.py
+index 12399ac3cff31abbbfc5da474119666f43ed340b..8fc6e73e9797973f2c2fea179c38405033b69941 100644
+--- a/src/packaging/utils.py
++++ b/src/packaging/utils.py
+@@ -58,7 +58,7 @@ class InvalidSdistFilename(ValueError):
+ _validate_regex = re.compile(
+     r"[a-z0-9]|[a-z0-9][a-z0-9._-]*[a-z0-9]", re.IGNORECASE | re.ASCII
+ )
+-_normalized_regex = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*", re.ASCII)
++_normalized_regex = re.compile(r"[a-z0-9]|[a-z0-9]([a-z0-9-](?!--))*[a-z0-9]", re.ASCII)
+ # PEP 427: The build number must start with a digit.
+ _build_tag_regex = re.compile(r"(\d+)(.*)", re.ASCII)
+ 

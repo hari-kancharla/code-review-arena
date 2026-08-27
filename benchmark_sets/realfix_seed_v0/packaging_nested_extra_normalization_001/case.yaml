@@ -1,0 +1,66 @@
+category: correctness
+description: Extra canonicalization only inspected a top-level comparison tuple, so
+  an extra nested inside a parenthesized group kept its original spelling and failed
+  to match the canonical extra name.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_markers.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - walk nested lists
+    - recurse
+    concepts:
+    - nested markers
+    - extra canonicalization
+    files:
+    - line_ranges:
+      - end: 166
+        start: 163
+      path: src/packaging/markers.py
+    id: bug-1
+    must_mention:
+    - parenthesized group
+    summary: _normalize_extras returned immediately unless its argument was a tuple,
+      so a nested list (a parenthesized group) was left unchanged and extras inside
+      it were never canonicalized.
+id: packaging_nested_extra_normalization_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-06-16'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Nested extra markers are not canonicalized
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

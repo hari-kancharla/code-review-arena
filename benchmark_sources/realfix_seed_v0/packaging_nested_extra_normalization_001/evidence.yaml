@@ -1,0 +1,34 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/07265129295b4b95b9143b50e3ce4709f31a8c49/LICENSE
+buggy_commit: 349abfad0688f42eb835ed8a10380d6cbf6940e7
+fixed_commit: 07265129295b4b95b9143b50e3ce4709f31a8c49
+fixed_date: '2026-06-16'
+issue_url: https://github.com/pypa/packaging/pull/1246
+pull_request_url: https://github.com/pypa/packaging/pull/1246
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/markers.py
+changed_test_paths:
+- tests/test_markers.py
+changed_source_line_count: 6
+category: correctness
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/1246 (Nested extra markers
+  are not canonicalized) is a historical repair whose parent is the buggy tree. The added
+  or rewritten regression coverage in tests/test_markers.py fails on that parent and passes
+  at the fix.
+why_buggy_behavior_is_wrong: Extra canonicalization only inspected a top-level comparison
+  tuple, so an extra nested inside a parenthesized group kept its original spelling and failed
+  to match the canonical extra name.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_markers.py -q` (`tests/test_markers.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/markers.py in the
+  after/ tree) is exactly the hunk the historical fix rewrites: _normalize_extras returned
+  immediately unless its argument was a tuple, so a nested list (a parenthesized group) was
+  left unchanged and extras inside it were never canonicalized. The added tests pin that defective
+  behaviour.'
+admission_status: accepted

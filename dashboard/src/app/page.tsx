@@ -66,8 +66,8 @@ const benchmarkPacks = [
   {
     id: "benchmark_sets/realfix_seed_v0",
     label: "realfix_seed_v0",
-    cases: 5,
-    purpose: "Historical-fix methodology seed",
+    cases: 24,
+    purpose: "Historical-fix pack (Docker-only)",
     validation: "Docker-backed patch apply + tests",
   },
 ];

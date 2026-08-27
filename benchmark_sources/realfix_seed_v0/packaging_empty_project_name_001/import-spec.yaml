@@ -1,0 +1,47 @@
+schema_version: '1'
+pack:
+  version: '1'
+  name: realfix_seed_v0
+case:
+  id: packaging_empty_project_name_001
+  title: Wheel and sdist parsers accept an empty project name
+  category: correctness
+  severity: medium
+  stack:
+  - python
+  description: The wheel project-name pattern used a star quantifier and the sdist
+    parser never checked the name side of the last dash, so filenames such as -1.0-py3-none-any.whl
+    and -1.0.tar.gz parsed as a nameless distribution instead of being rejected.
+source_paths:
+- src/packaging
+tests_root: tests
+ground_truth:
+  bugs:
+  - id: bug-1
+    summary: The wheel name pattern allowed zero characters and parse_sdist_filename
+      did not reject an empty name_part after rpartition, so a leading dash was accepted
+      as a distribution with no project name.
+    files:
+    - path: src/packaging/utils.py
+      line_ranges:
+      - start: 68
+        end: 68
+      - start: 213
+        end: 213
+      - start: 277
+        end: 277
+    concepts:
+    - filename parsing
+    - empty name
+    must_mention:
+    - nameless distribution
+    acceptable_fix_keywords:
+    - require a character
+execution:
+  run_tests: true
+  test_command: pytest tests/test_utils.py -q
+  timeout_seconds: 120
+  docker_image: arena-realfix-seed:0
+validation:
+  patch_required: true
+  tests_required: true

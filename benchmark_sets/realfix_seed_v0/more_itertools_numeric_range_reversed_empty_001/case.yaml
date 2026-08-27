@@ -1,0 +1,63 @@
+category: correctness
+description: numeric_range.__reversed__ always indexed the last element to build the
+  reversed span, so an empty range raised IndexError instead of yielding no values.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - guard the last index
+    concepts:
+    - reverse iteration
+    - vacuous span
+    files:
+    - line_ranges:
+      - end: 2408
+        start: 2406
+      path: more_itertools/more.py
+    id: bug-1
+    must_mention:
+    - empty numeric span
+    summary: __reversed__ called _get_by_index(-1) unconditionally, which raises on
+      an empty range. An empty numeric_range must reverse to an empty iterator.
+id: more_itertools_numeric_range_reversed_empty_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2026-04-10'
+  public_fix_date_basis: git_author_date
+  source_label: more-itertools/more-itertools
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Reversing an empty numeric_range raises IndexError
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

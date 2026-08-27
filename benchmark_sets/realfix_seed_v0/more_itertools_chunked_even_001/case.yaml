@@ -1,0 +1,64 @@
+category: correctness
+description: The online path of chunked_even sized its lookahead buffer as n*(n-1)-1,
+  which is too small for some n and produced uneven chunks from a streaming iterable.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - larger buffer
+    - n plus
+    concepts:
+    - lookahead buffer
+    - even chunks
+    files:
+    - line_ranges:
+      - end: 3929
+        start: 3928
+      path: more_itertools/more.py
+    id: bug-1
+    must_mention:
+    - insufficient lookahead
+    summary: _chunked_even_online used maxbuf = n*(n-1)-1, which does not buffer enough
+      elements to keep chunk lengths even for every n.
+id: more_itertools_chunked_even_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2021-08-01'
+  public_fix_date_basis: git_author_date
+  source_label: more-itertools/more-itertools
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: chunked_even online buffer size is too small
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

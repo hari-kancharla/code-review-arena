@@ -1,0 +1,48 @@
+{
+  "buggy_commit": "247e15b3a489d5805375c95dfa79486c9bd0eb1b",
+  "buggy_commit_committer_date": "2026-04-09T14:58:06+00:00",
+  "buggy_source_files": [
+    "more_itertools/__init__.py",
+    "more_itertools/__init__.pyi",
+    "more_itertools/more.py",
+    "more_itertools/more.pyi",
+    "more_itertools/py.typed",
+    "more_itertools/recipes.py",
+    "more_itertools/recipes.pyi"
+  ],
+  "changed_source_paths": [
+    "more_itertools/more.py"
+  ],
+  "changed_test_paths": [
+    "tests/test_more.py"
+  ],
+  "diff_policy_version": "1",
+  "fixed_commit": "edb3346f835ca917efbfda5e2d6664ab952da369",
+  "fixed_commit_author_date": "2026-04-10T19:27:35+00:00",
+  "fixed_commit_committer_date": "2026-04-10T19:29:02+00:00",
+  "fixed_source_files": [
+    "more_itertools/__init__.py",
+    "more_itertools/__init__.pyi",
+    "more_itertools/more.py",
+    "more_itertools/more.pyi",
+    "more_itertools/py.typed",
+    "more_itertools/recipes.py",
+    "more_itertools/recipes.pyi"
+  ],
+  "fixed_test_files": [
+    "__init__.py",
+    "test_more.py",
+    "test_recipes.py"
+  ],
+  "merge_base": "247e15b3a489d5805375c95dfa79486c9bd0eb1b",
+  "mode": "reverse_fix",
+  "object_format": "sha1",
+  "pr_diff_sha256": "9cfd3cb7decc9ac57347409da0e8b43f094c7015e5999549834f0e8f2655d3bb",
+  "provenance_schema_version": "3",
+  "reference_patch_sha256": "5ab7a3c0431202a0d4efb7db0f6b2434d26b19205129f8f7eb53bc2737eac538",
+  "source_label": "more-itertools/more-itertools",
+  "source_paths": [
+    "more_itertools"
+  ],
+  "tests_root": "tests"
+}

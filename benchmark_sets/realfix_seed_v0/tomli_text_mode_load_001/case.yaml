@@ -1,0 +1,64 @@
+category: correctness
+description: tomli.load called .decode() on the result of fp.read(), so a file opened
+  in text mode raised AttributeError instead of a TypeError telling the caller to
+  use binary mode.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_misc.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - friendly type error
+    concepts:
+    - file mode
+    - text handle
+    files:
+    - line_ranges:
+      - end: 77
+        start: 77
+      path: src/tomli/_parser.py
+    id: bug-1
+    must_mention:
+    - text-mode file
+    summary: load decoded fp.read() without checking that the result was bytes, so
+      a text-mode file raised AttributeError from str.decode.
+id: tomli_text_mode_load_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2022-01-30'
+  public_fix_date_basis: git_author_date
+  source_label: hukkin/tomli
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: load on a text-mode file raises AttributeError
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

@@ -1,0 +1,16 @@
+diff --git a/idna/core.py b/idna/core.py
+index c66fb9f08f8f5f7522913098a216c6a1fdbb307f..871ebd33938c9c06c062ad248f317f0c3d3a0a8e 100644
+--- a/idna/core.py
++++ b/idna/core.py
+@@ -312,10 +312,7 @@ def ulabel(label):
+         check_label(label_bytes)
+         return label_bytes.decode('ascii')
+ 
+-    try:
+-        label = label_bytes.decode('punycode')
+-    except UnicodeError:
+-        raise IDNAError('Invalid A-label')
++    label = label_bytes.decode('punycode')
+     check_label(label)
+     return label
+ 

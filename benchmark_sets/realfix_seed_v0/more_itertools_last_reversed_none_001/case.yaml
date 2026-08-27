@@ -1,0 +1,66 @@
+category: correctness
+description: last() used hasattr to decide whether to call reversed(), so an object
+  that sets __reversed__ = None (the pathlib.Path pattern) still entered that branch
+  and TypeError'd.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_more.py -q
+  timeout_seconds: 180
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - getattr None
+    - truthy reversed
+    concepts:
+    - disabled reversed
+    - presence versus truth
+    files:
+    - line_ranges:
+      - end: 286
+        start: 286
+      path: more_itertools/more.py
+    id: bug-1
+    must_mention:
+    - disabled reverse
+    summary: hasattr is true when __reversed__ exists even if its value is None, so
+      last() called reversed() on objects that explicitly disable reverse iteration
+      and crashed.
+id: more_itertools_last_reversed_none_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2025-07-14'
+  public_fix_date_basis: git_author_date
+  source_label: more-itertools/more-itertools
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: last() crashes when __reversed__ is None
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

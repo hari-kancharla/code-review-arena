@@ -1,0 +1,34 @@
+source_label: pypa/packaging
+repository_url: https://github.com/pypa/packaging
+license: Apache-2.0 OR BSD-2-Clause
+license_url: https://github.com/pypa/packaging/blob/08bb047794f4e70b157dacef4538b3a6e3492743/LICENSE
+buggy_commit: 28c299e8a823600dd66d4adeb7c7cc98e11089d2
+fixed_commit: 08bb047794f4e70b157dacef4538b3a6e3492743
+fixed_date: '2026-06-05'
+issue_url: https://github.com/pypa/packaging/pull/1218
+pull_request_url: https://github.com/pypa/packaging/pull/1218
+source_selectors:
+- src/packaging
+tests_root: tests
+changed_source_paths:
+- src/packaging/direct_url.py
+changed_test_paths:
+- tests/test_direct_url.py
+changed_source_line_count: 2
+category: security
+evidence_summary: Upstream https://github.com/pypa/packaging/pull/1218 (Direct URL auth stripping
+  splits on the first at-sign) is a historical repair whose parent is the buggy tree. The
+  added or rewritten regression coverage in tests/test_direct_url.py fails on that parent
+  and passes at the fix.
+why_buggy_behavior_is_wrong: Stripping userinfo from a direct URL netloc used split on the
+  first at-sign, so a password that itself contained '@' left part of the secret in the published
+  URL.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_direct_url.py -q` (`tests/test_direct_url.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/packaging/direct_url.py in the
+  after/ tree) is exactly the hunk the historical fix rewrites: _strip_auth_from_netloc split
+  the netloc on the first ''@'', so a password containing that character was only partially
+  removed and the remainder stayed in the URL that DirectUrl.to_dict publishes. The added
+  tests pin that defective behaviour.'
+admission_status: accepted

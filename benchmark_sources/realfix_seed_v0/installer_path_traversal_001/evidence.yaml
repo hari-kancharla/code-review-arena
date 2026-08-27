@@ -1,0 +1,34 @@
+source_label: pypa/installer
+repository_url: https://github.com/pypa/installer
+license: MIT
+license_url: https://github.com/pypa/installer/blob/2eccd66b344de24ee7acc6fc01741a8aa2713f05/LICENSE
+buggy_commit: 504fa8f980641c82868af834f5d30b485ad8a902
+fixed_commit: 2eccd66b344de24ee7acc6fc01741a8aa2713f05
+fixed_date: '2026-03-28'
+issue_url: https://github.com/pypa/installer/pull/317
+pull_request_url: https://github.com/pypa/installer/pull/317
+source_selectors:
+- src/installer
+tests_root: tests
+changed_source_paths:
+- src/installer/destinations.py
+changed_test_paths:
+- tests/test_destinations.py
+changed_source_line_count: 9
+category: security
+evidence_summary: Upstream https://github.com/pypa/installer/pull/317 (Wheel destination joins
+  paths without containing them) is a historical repair whose parent is the buggy tree. The
+  added or rewritten regression coverage in tests/test_destinations.py fails on that parent
+  and passes at the fix.
+why_buggy_behavior_is_wrong: SchemeDictionaryDestination joined a scheme directory with a
+  caller-supplied relative path and wrote there with no containment check, so a path containing
+  parent-directory segments could escape the intended install root.
+fixed_tests_that_exercise_it: The case runs `pytest tests/test_destinations.py -q` (`tests/test_destinations.py`).
+  That command fails on the buggy tree and passes after `reference.patch`. The whole module
+  is used rather than a single node so mutants elsewhere in the ground-truth file can be killed.
+why_ground_truth_is_supported: 'The declared buggy logic (src/installer/destinations.py in
+  the after/ tree) is exactly the hunk the historical fix rewrites: The destination path was
+  formed by joining the scheme directory with the requested relative path and never verified
+  that the resolved location still sat inside that directory, so parent-directory segments
+  escaped the install root. The added tests pin that defective behaviour.'
+admission_status: accepted

@@ -1,0 +1,64 @@
+category: correctness
+description: idna.encode decoded a bytes argument with ascii and let UnicodeDecodeError
+  escape, so a non-ASCII byte string raised a raw codec error instead of the documented
+  IDNAError.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_idna.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - wrap the decode
+    concepts:
+    - bytes argument
+    - codec failure
+    files:
+    - line_ranges:
+      - end: 342
+        start: 342
+      path: idna/core.py
+    id: bug-1
+    must_mention:
+    - raw codec error
+    summary: encode called bytes.decode('ascii') without catching UnicodeDecodeError,
+      so a byte string that was not ASCII escaped as a codec error rather than IDNAError.
+id: idna_non_ascii_bytes_encode_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2022-04-27'
+  public_fix_date_basis: git_author_date
+  source_label: kjd/idna
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: encode on non-ASCII bytes leaks UnicodeDecodeError
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true

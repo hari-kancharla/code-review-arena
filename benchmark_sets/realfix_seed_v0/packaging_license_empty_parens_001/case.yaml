@@ -1,0 +1,67 @@
+category: correctness
+description: canonicalize_license_expression translated tokens into a Python expression
+  and evaluated it, so the empty group '()' evaluated as valid instead of being rejected
+  as an invalid license expression.
+execution:
+  docker_image: arena-realfix-seed:0
+  run_static_analysis: false
+  run_tests: true
+  static_analysis_command: null
+  test_command: pytest tests/test_metadata.py -q
+  timeout_seconds: 120
+ground_truth:
+  acceptable_findings: []
+  bugs:
+  - acceptable_fix_keywords:
+    - reject empty group
+    concepts:
+    - SPDX grammar
+    - empty group
+    files:
+    - line_ranges:
+      - end: 85
+        start: 83
+      - end: 104
+        start: 100
+      path: src/packaging/licenses/__init__.py
+    id: bug-1
+    must_mention:
+    - empty group
+    summary: Empty parenthesis pairs were not detected, and the translated expression
+      was eval'd rather than compiled, so '()' produced a successful empty evaluation
+      instead of InvalidLicenseExpression.
+id: packaging_license_empty_parens_001
+input:
+  after_dir: after
+  before_dir: before
+  diff: pr.diff
+  tests_dir: tests
+metrics:
+  beta: 1.0
+origin:
+  kind: derived_public
+  public_fix_date: '2025-05-22'
+  public_fix_date_basis: git_author_date
+  source_label: pypa/packaging
+scoring:
+  false_positive_penalty: 5.0
+  false_positive_penalty_cap: 15.0
+  invalid_json_penalty: 20.0
+  weights:
+    concept_match: 35.0
+    file_match: 20.0
+    fix_quality: 15.0
+    line_overlap: 15.0
+    no_false_positives: 5.0
+    severity_match: 10.0
+severity: medium
+stack:
+- python
+title: Empty parentheses are accepted as a license expression
+validation:
+  detection_requirement: all_bugs
+  max_false_positives: 0
+  patch_required: true
+  protected_paths: []
+  structural_validators: []
+  tests_required: true
