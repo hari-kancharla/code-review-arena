@@ -11,6 +11,7 @@ from arena.benchmark.certify import (
     _baseline_fails,
     _check_determinism,
     _is_pytest_command,
+    _pytest_failed_to_start,
     certify_pack,
 )
 from arena.execution.test_executor import TestExecutionResult
@@ -31,6 +32,11 @@ def test_pytest_baseline_requires_a_genuine_test_failure():
     # the tests never ran-and-failed on the bug: a broken pytest case must NOT certify.
     for code in (2, 3, 4, 5):
         assert _baseline_fails(_baseline_result(exit_code=code), pytest_command=True) is False
+    # Interpreter-level "No module named pytest" also exits 1 and must not
+    # count as the seeded bug making a test fail.
+    missing = _baseline_result(exit_code=1, stderr="/usr/bin/python3: No module named pytest\n")
+    assert _pytest_failed_to_start(missing) is True
+    assert _baseline_fails(missing, pytest_command=True) is False
     # A timeout or a never-ran result is not a genuine failure either.
     assert (
         _baseline_fails(_baseline_result(exit_code=None, timed_out=True), pytest_command=True)

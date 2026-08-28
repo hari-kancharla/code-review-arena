@@ -14,7 +14,7 @@ from arena.benchmark.pack_hash import pack_checksum, stored_checksum, write_chec
 from arena.core.config import resolve_benchmark_set
 from arena.core.errors import ExecutionError
 from arena.core.registry import create_reviewer
-from arena.execution.hardening import sandbox_env, sandboxed_home_env
+from arena.execution.hardening import harness_user_site, sandbox_env, sandboxed_home_env
 from arena.execution.subprocess_runner import run_command
 from arena.execution.test_executor import TestExecutionRequest, TestExecutor
 
@@ -84,7 +84,27 @@ def test_sandbox_env_does_not_inherit_parent_environment(monkeypatch):
     env = sandbox_env()
     assert "SUPER_SECRET_API_KEY" not in env
     assert env["PYTHONDONTWRITEBYTECODE"] == "1"
+    assert env["PYTHONNOUSERSITE"] == "1"
     assert "PATH" in env
+
+
+def test_sandbox_env_does_not_forward_parent_pythonpath(monkeypatch):
+    monkeypatch.setenv("PYTHONPATH", "/tmp/attacker-path")
+    env = sandbox_env()
+    pythonpath = env.get("PYTHONPATH", "")
+    assert "/tmp/attacker-path" not in pythonpath.split(os.pathsep)
+    user_site = harness_user_site()
+    if user_site:
+        assert user_site in pythonpath.split(os.pathsep)
+
+
+def test_sandbox_env_keeps_harness_user_site_importable():
+    user_site = harness_user_site()
+    if not user_site:
+        pytest.skip("interpreter is not using a user-site directory")
+    env = sandbox_env()
+    assert user_site in env.get("PYTHONPATH", "").split(os.pathsep)
+    assert env["PYTHONNOUSERSITE"] == "1"
 
 
 def test_sandbox_env_passthrough_is_explicit(monkeypatch):
@@ -128,6 +148,25 @@ def test_fixture_runs_with_isolated_home(tmp_path):
     home_seen = seen.read_text()
     assert home_seen != os.path.expanduser("~")
     assert "arena-home-" in home_seen
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX local execution")
+def test_sandboxed_pytest_is_importable(tmp_path):
+    # Isolated HOME must not hide a --user install of pytest: pin_interpreter
+    # rewrites ``pytest`` to ``sys.executable -m pytest``, which needs the
+    # module on the child's sys.path.
+    result = TestExecutor().execute(
+        TestExecutionRequest(
+            case_id="case",
+            workspace_path=tmp_path,
+            test_command=[sys.executable, "-c", "import pytest; print(pytest.__file__)"],
+            timeout_seconds=10,
+            allow_local_execution=True,
+        )
+    )
+    assert result.ran is True
+    assert result.passed is True
+    assert "pytest" in result.stdout
 
 
 def test_fixture_commands_cannot_read_host_secrets(tmp_path, monkeypatch):

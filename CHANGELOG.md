@@ -22,6 +22,22 @@ Keep a Changelog conventions.
   `arena import-fix`) stay here. Only the cases moved. Four packs ship here now instead
   of five.
 
+### Fixed
+
+- Local fixture execution restores the harness interpreter's user-site on
+  `PYTHONPATH` when `HOME` is isolated, so a `--user` install of pytest is still
+  importable. Isolated `HOME` no longer makes every local run look like a test
+  failure (`No module named pytest`).
+- Pack certification no longer treats `python -m pytest` failing with
+  `No module named pytest` (exit code 1) as a genuine baseline test failure.
+- `run_supervised` turns a missing executable into `ExecutionError` instead of
+  leaking `FileNotFoundError`. `custom-command` pins a bare `python`/`python3`/
+  `pytest` to the harness interpreter, matching local test execution, so wrappers
+  written as `python script.py` work on hosts that only ship `python3`. A
+  path-qualified interpreter (`.venv/bin/python`, `/opt/model-env/bin/pytest`) is
+  left exactly as written: it names an environment the wrapper depends on, and
+  redirecting it would strip the packages it was installed with.
+
 ### Security
 
 - **A passing test run now requires machine-readable proof.** The verdict was the
