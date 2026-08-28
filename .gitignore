@@ -49,3 +49,6 @@ docs/reports/audit-v1-results.md
 
 # Separate project with its own repository; never part of this one
 /website/
+
+# Local experiment archive; never part of this repository:
+/.experiments-archive/
