@@ -18,13 +18,32 @@ from arena.core.errors import ValidationError
 _SHELL_OPERATORS = {"&&", "||", ";", "|", ">", ">>", "<", "<<", "&"}
 
 
+def _bare_program(argv: list[str]) -> str | None:
+    """The command name, but only when it is a bare name resolved through PATH.
+
+    A path-qualified command (``.venv/bin/python``, ``/opt/model-env/bin/pytest``)
+    is a deliberate choice of interpreter: the caller wants that environment's
+    packages, not ours. Rewriting it to a different interpreter silently strips
+    every dependency it was installed with, so qualified commands are returned as
+    None and left alone. Only a bare name, which would otherwise be resolved from
+    an ambiguous PATH, is eligible for pinning.
+    """
+    if not argv:
+        return None
+    program = argv[0]
+    if "/" in program or "\\" in program:
+        return None
+    return PurePosixPath(program).name
+
+
 def pin_interpreter(argv: list[str]) -> list[str]:
-    """Pin python/pytest invocations to the harness interpreter.
+    """Pin bare python/pytest invocations to the harness interpreter.
 
     Only valid for local execution; inside a container the image's own
     interpreter must be used, so use pin_container_interpreter there instead.
+    A path-qualified interpreter is always left as written.
     """
-    program = PurePosixPath(argv[0]).name
+    program = _bare_program(argv)
     if program == "pytest":
         return [sys.executable, "-m", "pytest", *argv[1:]]
     if program in {"python", "python3"}:
@@ -40,9 +59,10 @@ def pin_container_interpreter(argv: list[str]) -> list[str]:
     workspace root fails to collect inside the container. ``python -m pytest``
     does add the workspace root, and every benchmark image ships python, so we
     normalize to it. Unlike pin_interpreter this keeps the bare ``python`` name
-    (the image's interpreter), never the harness's sys.executable.
+    (the image's interpreter), never the harness's sys.executable. A
+    path-qualified command is left as written, for the same reason as there.
     """
-    program = PurePosixPath(argv[0]).name
+    program = _bare_program(argv)
     if program == "pytest":
         return ["python", "-m", "pytest", *argv[1:]]
     if program in {"python", "python3"}:
