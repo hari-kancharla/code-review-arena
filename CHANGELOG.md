@@ -31,9 +31,12 @@ Keep a Changelog conventions.
 - Pack certification no longer treats `python -m pytest` failing with
   `No module named pytest` (exit code 1) as a genuine baseline test failure.
 - `run_supervised` turns a missing executable into `ExecutionError` instead of
-  leaking `FileNotFoundError`. `custom-command` pins `python`/`python3`/`pytest`
-  to the harness interpreter, matching local test execution, so wrappers written
-  as `python script.py` work on hosts that only ship `python3`.
+  leaking `FileNotFoundError`. `custom-command` pins a bare `python`/`python3`/
+  `pytest` to the harness interpreter, matching local test execution, so wrappers
+  written as `python script.py` work on hosts that only ship `python3`. A
+  path-qualified interpreter (`.venv/bin/python`, `/opt/model-env/bin/pytest`) is
+  left exactly as written: it names an environment the wrapper depends on, and
+  redirecting it would strip the packages it was installed with.
 
 ### Security
 

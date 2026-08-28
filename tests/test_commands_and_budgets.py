@@ -51,6 +51,27 @@ def test_pin_interpreter_normalizes_python_and_pytest():
     assert pin_interpreter(["npm", "test"]) == ["npm", "test"]
 
 
+def test_pin_interpreter_leaves_path_qualified_interpreters_alone():
+    """An explicit interpreter path is a choice of environment, not a name to fix.
+
+    A reviewer that runs `.venv/bin/python` wants that virtualenv's packages.
+    Rewriting it to the harness interpreter used to strip every dependency the
+    wrapper was installed with, and it failed on missing imports rather than
+    saying why.
+    """
+    for argv in (
+        [".venv/bin/python", "script.py"],
+        ["/opt/model-env/bin/python3", "run.py"],
+        ["/opt/model-env/bin/pytest", "-q"],
+        ["./tools/pytest", "-q"],
+    ):
+        assert pin_interpreter(list(argv)) == argv
+
+
+def test_pin_interpreter_tolerates_an_empty_command():
+    assert pin_interpreter([]) == []
+
+
 def test_pin_container_interpreter_routes_pytest_through_python_m():
     # `python -m pytest` puts the workspace root on sys.path so a case that
     # imports a top-level module collects; the bare `pytest` script does not.
@@ -64,6 +85,12 @@ def test_pin_container_interpreter_routes_pytest_through_python_m():
     # The container's own python is used, never the harness sys.executable.
     assert pin_container_interpreter(["python3", "-m", "pytest"]) == ["python", "-m", "pytest"]
     assert pin_container_interpreter(["npm", "test"]) == ["npm", "test"]
+    # Same rule as pin_interpreter: an explicit path is left as written.
+    assert pin_container_interpreter(["/opt/venv/bin/pytest", "-q"]) == [
+        "/opt/venv/bin/pytest",
+        "-q",
+    ]
+    assert pin_container_interpreter([]) == []
 
 
 def test_executor_runs_command_sequences_and_stops_on_failure(tmp_path):
