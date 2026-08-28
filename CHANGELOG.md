@@ -7,17 +7,20 @@ Keep a Changelog conventions.
 
 ### Changed
 
-- **RealFix case data moved out of this repository.** `benchmark_sets/realfix_seed_v0`,
-  its import specs under `benchmark_sources/`, its pinned `docker/realfix_seed/` image
-  and its research record are gone from here. Every RealFix case — the five that lived
-  here plus the twenty built in the dataset repository — now lives in one place,
-  [realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), as the
-  25-case `realfix_pilot_v1` pack. Two repositories each holding a differently-named,
-  non-overlapping slice of the same benchmark made it impossible to say which was
-  authoritative; now the split is by kind, not by accident. This repository is the
-  harness, that one is the data, and it consumes this harness as a pinned dependency.
-  The ingestion machinery (`arena mine-fixes`, `arena import-fix`) stays here — only
-  the cases moved. Four packs ship here now instead of five.
+- **RealFix case data moved to its own repository.** Removed
+  `benchmark_sets/realfix_seed_v0`, its import specs under `benchmark_sources/`, its
+  pinned `docker/realfix_seed/` image, and its research notes.
+
+  RealFix used to be split across two repositories under two names, with no case in
+  common: five here, twenty in the dataset repository. Nothing said which was the real
+  one. All 25 now live together in
+  [realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark) as the
+  `realfix_pilot_v1` pack.
+
+  This repository is the harness; that one is the data, and it installs this harness as
+  a pinned dependency. The tools for building cases (`arena mine-fixes`,
+  `arena import-fix`) stay here. Only the cases moved. Four packs ship here now instead
+  of five.
 
 ### Security
 

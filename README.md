@@ -67,13 +67,14 @@ The harness assumes reviewers and benchmark packs may be adversarial:
 
 ## Training-data exposure
 
-Every historical-fix case is derived from a public repository, so the upstream fix and
-the discussion explaining it are plausibly in the training data of the model under
-evaluation — the standard criticism of any benchmark built from GitHub history. The
-harness answers with disclosure rather than a cleanliness claim it could not support.
-The cases themselves live in
-[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark); this
-repository provides the machinery that imports, dates and splits them.
+Every historical-fix case comes from a public repository. So the fix, and the
+discussion around it, may well be in the training data of the model being tested. That
+is the standard criticism of any benchmark built from GitHub history, and it cannot be
+argued away. The harness discloses the problem instead of claiming the cases are clean.
+
+The cases live in
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark). This
+repository holds the machinery that imports them, dates them, and splits them.
 
 Each case records when its answer became public, read from the commit object by
 `arena import-fix` rather than remembered by a human. Each run may declare the
@@ -110,13 +111,13 @@ arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified
 ```
 
-Four packs ship today. `benchmark_sets/v1` (nine cases) and `benchmark_sets/audit_v1` /
-`benchmark_sets/audit_v2` (ten each) are authored calibration and audit packs. For the
-commands above, swap in `audit_v1` or `audit_v2`; both are patch-backed and runnable
-with `--allow-local-execution`. The execution-verified historical-fix cases (RealFix)
-are **not** in this repository — they are a separate versioned dataset,
-[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), which
-this harness runs against.
+Four packs ship here. `benchmark_sets/v1` (nine cases), plus `audit_v1` and `audit_v2`
+(ten each), are hand-written calibration and audit packs. Swap either audit pack into
+the commands above; both are patch-backed and run with `--allow-local-execution`.
+
+The historical-fix cases (RealFix) are not here. They live in
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), a separate
+dataset repository that this harness runs against.
 `benchmark_sets/integrity_pilot_v0` belongs to a separate track with its own
 commands (see below).
 
@@ -236,14 +237,16 @@ Benchmark packs:
 | `benchmark_sets/audit_v2` | 10 | Authored logic-defect cases | patch apply + tests |
 | `benchmark_sets/integrity_pilot_v0` | 8 pairs | Validation-integrity review (separate track) | visible CI + hidden trusted oracle |
 
-The first three packs are authored calibration and audit packs. Historical-fix
-(RealFix) cases are **not** shipped here: they are a separate versioned dataset,
-[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark), because
-each case bundles a full source-plus-tests tree that does not scale cleanly inside
-the harness repository. That repository pins this harness as a
-dependency and runs its pack through the commands above. This repository keeps the
-ingestion machinery: candidate fixes are found with `arena mine-fixes` and turned into
-packs with `arena import-fix`
+The first three packs are hand-written calibration and audit packs.
+
+RealFix cases are not shipped here. Each one bundles a full copy of a project's source
+and tests, which is too much data to keep beside the harness, so they live in
+[realfix-benchmark](https://github.com/hari-kancharla/realfix-benchmark). That
+repository pins this harness as a dependency and runs its pack through the commands
+above.
+
+What stays here is the machinery for building cases: `arena mine-fixes` finds candidate
+fixes, and `arena import-fix` turns them into packs
 ([docs/historical-fix-ingestion.md](docs/historical-fix-ingestion.md)).
 
 Metrics:
