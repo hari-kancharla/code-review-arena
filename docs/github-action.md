@@ -5,8 +5,8 @@ commands, so a green checkout matches a green CI run. No credentials are require
 controls are deterministic.
 
 The backend job installs the package, lints, type-checks, and tests, then validates,
-checksum-verifies, and contamination-scans every shipped pack (`v1`, `audit_v1`,
-`audit_v2`, and `realfix_seed_v0`), certifies the locally executable packs, and runs
+checksum-verifies, and contamination-scans every shipped case pack (`v1`, `audit_v1`,
+and `audit_v2`), certifies them, and runs
 the reference and adversarial control runs:
 
 ```yaml

@@ -12,8 +12,8 @@ from arena.core.limits import BENCHMARK_SET_NAME_LEN
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 # Packs are resolved dynamically rather than hardcoded: a Literal list silently
-# excluded every pack added after it was written (realfix_seed_v0 shipped, is
-# validated and certified in CI, and was still rejected here with a 422). The
+# excluded every pack added after it was written, so a pack that shipped, validated
+# and certified in CI was still rejected here with a 422. The
 # name is only length-bounded; resolve_benchmark_set does the real validation --
 # it rejects path separators and `..` and 404s an unknown pack, which is the same
 # policy POST /runs already uses.
