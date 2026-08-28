@@ -46,3 +46,6 @@ docs/reports/audit-v1-results.md
 .DS_Store
 .vscode/
 .idea/
+
+# Separate project with its own repository; never part of this one
+/website/
