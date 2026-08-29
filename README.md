@@ -6,6 +6,8 @@ Execution-backed benchmark for AI code-review agents.
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
+[Writeup: The reviewer that found every bug and fixed none of them](https://harikancharla.substack.com/p/the-reviewer-that-found-every-bug)
+
 ## About
 
 Code Review Arena measures whether an AI review agent can find a seeded bug in a pull
