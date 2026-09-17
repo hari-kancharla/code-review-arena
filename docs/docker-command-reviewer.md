@@ -49,6 +49,13 @@ values stay single arguments).
   operator builds or vets it, exactly like the benchmark sandbox image.
 - No host environment or credentials enter the container. A wrapper needing a
   model API should call an endpoint configured inside the image.
+
+- Each review records `docker_image_digest` in the run manifest: the digest the
+  configured tag resolved to in the local image store at review time. This pins
+  exactly what executed, so operator vetting of image contents can be audited
+  per run (the same tag can point elsewhere later). No digest is recorded when
+  the daemon or image was missing — the container never ran. The digest is
+  evidence, not certification: it does not prove the image is answer-free.
 - The API server treats `docker-command` like `custom-command`: it requires the
   local-execution opt-in (`ARENA_SERVER_ALLOW_LOCAL_EXECUTION`).
 - The container runs as a non-root user mapped to the caller; the payload

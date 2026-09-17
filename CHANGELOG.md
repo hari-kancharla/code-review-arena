@@ -7,6 +7,15 @@ Keep a Changelog conventions.
 
 ### Added
 
+- `docker-command` runs record `docker_image_digest`: the digest the configured
+  tag resolved to in the local image store at review time, captured from the
+  same bounded probe the test executor uses and persisted via the reviewer's
+  safe config into the run manifest. A tag alone is not reproducible evidence
+  (the same tag can point elsewhere later); the digest pins exactly what
+  executed. It is resolved only after the container actually ran, so fail-closed
+  paths (missing daemon or image) record no digest. Image contents still require
+  operator vetting; the digest makes that vetting auditable per run.
+
 - `arena preflight`: snapshot pack validation, reviewer configuration diagnostics,
   mode-aware local prerequisites and required Docker image checks, without
   executing reviewers/tests/containers or pulling images. Table and JSON modes

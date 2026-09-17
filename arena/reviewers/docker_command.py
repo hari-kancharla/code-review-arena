@@ -109,6 +109,10 @@ class DockerCommandReviewer(BaseReviewer):
     ) -> None:
         self.command_template = command_template
         self.docker_image = docker_image
+        # Resolved at review time from the local image store (the executor never
+        # pulls), so run evidence can pin exactly what executed. A tag alone is
+        # not reproducible evidence: the same tag can point elsewhere later.
+        self.docker_image_digest: str | None = None
         self.timeout_seconds = timeout_seconds
         self.reveal_metadata = reveal_metadata
         self.enable_repair = enable_repair
@@ -118,6 +122,8 @@ class DockerCommandReviewer(BaseReviewer):
         return {
             "command_template": redact_secrets(self.command_template),
             "docker_image": self.docker_image,
+            # Present after a review ran; None before any successful run.
+            "docker_image_digest": self.docker_image_digest,
             "timeout_seconds": self.timeout_seconds,
             "reveal_metadata": self.reveal_metadata,
             "enable_repair": self.enable_repair,
@@ -209,6 +215,11 @@ class DockerCommandReviewer(BaseReviewer):
                 # A killed CLI leaves the container running; sweep it on both
                 # kill paths, exactly like the test executor.
                 TestExecutor._force_remove_container(container_name)
+            # Pin what ran BEFORE parsing the answer: evidence of the image that
+            # executed is recorded even if the reviewer's output is invalid, and
+            # a failed container run is never attributed to a resolved digest.
+            if not completed.timed_out:
+                self.docker_image_digest = TestExecutor._image_digest(self.docker_image)
             if completed.timed_out:
                 raw = json.dumps({"error": f"command timed out after {self.timeout_seconds}s"})
                 return _invalid_response(raw, "reviewer timed out", _elapsed_ms(started))

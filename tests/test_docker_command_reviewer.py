@@ -4,6 +4,8 @@ import base64
 import json
 import os
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -161,6 +163,56 @@ def test_workspace_mount_is_read_only_for_reviewer_payloads(tmp_path):
 # ---------------------------------------------------------------------------
 # Live Docker verification (gated like the rest of the Docker suite).
 # ---------------------------------------------------------------------------
+
+
+def _review_context(audit_benchmark_dir):
+    return build_context(load_cases(audit_benchmark_dir)[0])
+
+
+def test_review_records_resolved_image_digest(audit_benchmark_dir, monkeypatch):
+    """A successful container run records the digest the tag resolved to."""
+    from arena.reviewers import docker_command as module
+
+    reviewer = DockerCommandReviewer("python x.py", "img:1")
+    assert reviewer.safe_config()["docker_image_digest"] is None
+    monkeypatch.setattr(module.TestExecutor, "_docker_available", staticmethod(lambda: True))
+    monkeypatch.setattr(module.TestExecutor, "_image_present", staticmethod(lambda image: True))
+    digest = "img@sha256:" + "a" * 64
+    seen: list[str] = []
+    monkeypatch.setattr(
+        module.TestExecutor,
+        "_image_digest",
+        staticmethod(lambda image: seen.append(image) or digest),
+    )
+    result = SimpleNamespace(
+        returncode=0,
+        stdout=json.dumps(
+            {"findings": [], "proposed_patch": None, "overall_risk": "low", "review_summary": "ok"}
+        ),
+        stderr="",
+        timed_out=False,
+        output_limit_exceeded=False,
+    )
+    monkeypatch.setattr(module, "run_supervised", lambda *a, **k: result)
+    response = reviewer.review(_review_context(audit_benchmark_dir))
+    assert response.parse_status == "exact"
+    assert seen == ["img:1"]
+    assert reviewer.safe_config()["docker_image_digest"] == digest
+
+
+def test_failed_review_leaves_digest_unresolved(audit_benchmark_dir, monkeypatch):
+    """Fail-closed paths never probe or record a digest."""
+    from arena.reviewers import docker_command as module
+
+    reviewer = DockerCommandReviewer("python x.py", "img:1")
+    probed = Mock()
+    monkeypatch.setattr(module.TestExecutor, "_image_digest", probed)
+    monkeypatch.setattr(module.TestExecutor, "_docker_available", staticmethod(lambda: True))
+    monkeypatch.setattr(module.TestExecutor, "_image_present", staticmethod(lambda image: False))
+    assert reviewer.review(_review_context(audit_benchmark_dir)).parse_status == "invalid"
+    assert reviewer.safe_config()["docker_image_digest"] is None
+    probed.assert_not_called()
+
 
 docker_tests = pytest.mark.skipif(
     not os.getenv("ARENA_DOCKER_TESTS"),
