@@ -106,6 +106,7 @@ python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -e ".[dev]"
 
+arena preflight benchmark_sets/audit_v1 --reviewer reference-patch --allow-local-execution
 arena validate benchmark_sets/audit_v1
 arena run benchmark_sets/audit_v1 --reviewer reference-patch --mode full --allow-local-execution
 arena leaderboard runs/ --metric validated_case_rate --beta 1.0 --include-unverified

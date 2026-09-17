@@ -7,6 +7,12 @@ Keep a Changelog conventions.
 
 ### Added
 
+- `arena preflight`: snapshot pack validation, reviewer configuration diagnostics,
+  mode-aware local prerequisites and required Docker image checks, without
+  executing reviewers/tests/containers or pulling images. Table and JSON modes
+  both exit 1 on failed checks; warnings identify unchecked assumptions.
+  See `docs/preflight.md`. The CLI also supports `python -m arena`.
+
 - **`docker-command` reviewer: a blind, containerized external reviewer.** A
   reviewer wrapper now runs in a hardened container (no network, all
   capabilities dropped, no-new-privileges, read-only rootfs, non-root, CPU /

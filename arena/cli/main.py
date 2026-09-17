@@ -25,6 +25,7 @@ from arena.cli.commands.integrity import (
 from arena.cli.commands.leaderboard import leaderboard as leaderboard_command
 from arena.cli.commands.list_cases import list_cases as list_cases_command
 from arena.cli.commands.mine_fixes import mine_fixes_command
+from arena.cli.commands.preflight import preflight as preflight_command
 from arena.cli.commands.report import report as report_command
 from arena.cli.commands.run import run as run_command
 from arena.cli.commands.validate import validate as validate_command
@@ -33,6 +34,28 @@ from arena.core import limits
 from arena.core.config import DEFAULT_BENCHMARK_SET, DEFAULT_RUNS_DIR, resolve_benchmark_path
 
 app = typer.Typer(help="Benchmark AI code reviewers on realistic pull-request bugs.")
+
+
+@app.command("preflight")
+def preflight(
+    benchmark_set: Path = typer.Argument(DEFAULT_BENCHMARK_SET),
+    reviewer: str | None = typer.Option(None, "--reviewer"),
+    command: str | None = typer.Option(None, "--command"),
+    docker_image: str | None = typer.Option(None, "--docker-image"),
+    mode: Literal["review", "patch", "full"] = typer.Option("full", "--mode"),
+    allow_local_execution: bool = typer.Option(False, "--allow-local-execution"),
+    as_json: bool = typer.Option(False, "--json"),
+) -> None:
+    """Check pack and setup without running reviewers, tests, or containers."""
+    preflight_command(
+        resolve_benchmark_path(benchmark_set),
+        reviewer,
+        command,
+        docker_image,
+        mode,
+        allow_local_execution,
+        as_json,
+    )
 
 
 @app.command("list-cases")

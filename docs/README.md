@@ -5,6 +5,7 @@ Start here, then read by topic.
 ## Getting started
 
 - [DEMO.md](DEMO.md) - fresh clone to a rendered leaderboard
+- [preflight.md](preflight.md) - setup checks before running an evaluation
 - [troubleshooting.md](troubleshooting.md) - common setup and run problems
 
 ## Concepts
