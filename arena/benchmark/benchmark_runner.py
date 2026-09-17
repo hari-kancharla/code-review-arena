@@ -794,6 +794,9 @@ def _run_on_snapshot(
             git_dirty=_git_dirty(),
             test_assisted=bool(getattr(reviewer, "reveal_test_output", False)),
             reviewer_oracle_reachable=bool(getattr(reviewer, "oracle_reachable", False)),
+            # Persisted when the reviewer resolved it (docker-command); None
+            # otherwise. The manifest's reviewer.config carries the same value.
+            reviewer_image_digest=getattr(reviewer, "docker_image_digest", None),
             pack_checksum=checksum,
             pack_checksum_verified=checksum_verified,
             # Reaching here with expected_pack_sha256 set means it matched (a

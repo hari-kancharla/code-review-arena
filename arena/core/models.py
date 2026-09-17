@@ -837,6 +837,11 @@ class RunMetadata(BaseModel):
     # metric. Default leaderboard eligibility therefore requires this to be False.
     # None on runs written before the field existed (unknown, treated as unsafe).
     reviewer_oracle_reachable: bool | None = None
+    # Digest the reviewer's container image resolved to at review time
+    # (docker-command only; None otherwise and on legacy runs). Pins exactly
+    # which image executed so per-run vetting is auditable; see
+    # arena/reviewers/docker_command.py.
+    reviewer_image_digest: str | None = None
     # An operator-declared, UNVERIFIABLE claim about the evaluated model. The
     # harness never infers a cutoff from a model id and never asserts one itself;
     # it records the claim with its basis and citation so a reader can judge it.

@@ -7,6 +7,13 @@ Keep a Changelog conventions.
 
 ### Added
 
+- Published audit-report rows now carry `reviewer_image_digest`, alongside the
+  run's integrity provenance (`run_status`, `pack_checksum_verified`). Runs
+  populate it from the reviewer after the run completes (`RunMetadata.
+  reviewer_image_digest`); it is None on host-reviewer and legacy runs. The
+  dashboard contract accepts it as an optional field, so reports written by an
+  older harness still validate and `schema_version` stays 1.0.
+
 - `docker-command` runs record `docker_image_digest`: the digest the configured
   tag resolved to in the local image store at review time, captured from the
   same bounded probe the test executor uses and persisted via the reviewer's

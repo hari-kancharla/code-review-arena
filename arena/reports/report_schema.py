@@ -68,6 +68,10 @@ class AuditReviewerRow(_Strict):
     # written before these fields existed.
     run_status: str = "complete"
     pack_checksum_verified: bool | None = None
+    # Which container image the reviewer executed in, pinned by digest (None on
+    # host/legacy runs). Defaulted optional: additive fields cannot break a
+    # reader that does not look for them, so schema_version stays 1.0.
+    reviewer_image_digest: str | None = None
 
 
 class AuditGap(_Strict):

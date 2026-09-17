@@ -197,6 +197,9 @@ def build_audit_report_data(
                 # the run that produced it.
                 "run_status": run.run_status,
                 "pack_checksum_verified": run.metadata.pack_checksum_verified,
+                # Which container image the reviewer actually executed in (None on
+                # host/legacy runs). Pins per-run image vetting into the artifact.
+                "reviewer_image_digest": run.metadata.reviewer_image_digest,
             }
         )
 
