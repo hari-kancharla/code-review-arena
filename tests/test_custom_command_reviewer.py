@@ -1,6 +1,7 @@
 import inspect
 import json
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,30 @@ def test_valid_fake_reviewer_command(audit_benchmark_dir):
     assert response.invalid_output is False
     assert response.parsed_response is not None
     assert response.parsed_response.findings
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="Reviewer execution is POSIX-only")
+@pytest.mark.parametrize("placeholder", ["{case_json}", '"{case_json}"'])
+def test_reviewer_runs_with_quoted_temporary_path(
+    audit_benchmark_dir, tmp_path, monkeypatch, placeholder
+):
+    parent = tmp_path / "reviewer's temporary files"
+    parent.mkdir()
+    # Exercise payload creation, command expansion, the supervisor, and parsing.
+    # monkeypatch restores tempfile's process-wide setting even on failure.
+    monkeypatch.setattr(tempfile, "tempdir", str(parent))
+    context = build_context(load_cases(audit_benchmark_dir)[0])
+    reviewer = CustomCommandReviewer(
+        f"python {VALID_REVIEWER} --case {placeholder}", timeout_seconds=30
+    )
+
+    response = reviewer.review(context)
+
+    assert response.invalid_output is False, response.parse_error_summary
+    assert response.parse_status == "exact"
+    assert response.parsed_response is not None
+    assert response.parsed_response.findings
+    assert list(parent.iterdir()) == [], "Reviewer temporary directories must be cleaned up"
 
 
 def test_invalid_json_command_fails_safely(audit_benchmark_dir):

@@ -91,13 +91,25 @@ def expand_command_template(
     case_id: str,
     workspace: Path,
 ) -> list[str]:
-    expanded = (
-        template.replace("{case_json}", str(case_json))
-        .replace("{diff_file}", str(diff_file))
-        .replace("{case_id}", case_id)
-        .replace("{workspace}", str(workspace))
-    )
-    return shlex.split(expanded)
+    """Parse template quoting before substituting literal placeholder values.
+
+    Paths may contain spaces or quotes; they must not be parsed as command
+    syntax. Substitute once so placeholder-like text inside a value stays literal.
+    """
+    values = {
+        "case_json": str(case_json),
+        "diff_file": str(diff_file),
+        "case_id": case_id,
+        "workspace": str(workspace),
+    }
+    return [
+        re.sub(
+            r"\{(case_json|diff_file|case_id|workspace)\}",
+            lambda match: values[match.group(1)],
+            argument,
+        )
+        for argument in shlex.split(template)
+    ]
 
 
 _SECRET_VALUE = re.compile(r"(?i)(\b\w*(?:key|token|secret|password)\w*\s*[=:]\s*)(\S+)")

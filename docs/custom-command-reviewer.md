@@ -39,7 +39,12 @@ disclose the failing assertions' expected values, so they appear only with
 | `{case_id}` | Case identifier |
 | `{workspace}` | Temporary directory containing copied relevant files |
 
-Commands are parsed with `shlex.split` and executed with `subprocess.run(..., shell=False)`.
+Commands are parsed with `shlex.split` **before** placeholders are substituted into
+individual arguments, then executed through the bounded process supervisor without
+a shell. Placeholder values remain literal, including spaces and quotes in paths.
+Both `{case_json}` and `"{case_json}"` work, as does `--case={case_json}`.
+Quote literal paths containing spaces in the command template itself. Placeholder
+values are not recursively expanded; unknown placeholders are left unchanged.
 
 ## Output contract
 
