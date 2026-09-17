@@ -9,6 +9,7 @@ from arena.core.errors import ReviewerError
 from arena.reviewers.base import BaseReviewer
 from arena.reviewers.controls import ControlReviewer
 from arena.reviewers.custom_command import CustomCommandReviewer
+from arena.reviewers.docker_command import DockerCommandReviewer
 from arena.reviewers.http import HttpReviewer
 from arena.reviewers.reference_patch import ReferencePatchReviewer
 from arena.reviewers.shallow_patch import ShallowPatchReviewer
@@ -23,6 +24,7 @@ def create_reviewer(
     reveal_metadata: bool = False,
     enable_repair: bool = False,
     reveal_test_output: bool = False,
+    docker_image: str | None = None,
 ) -> BaseReviewer:
     if spec in {"reference-patch", "control:reference_patch"}:
         return ReferencePatchReviewer()
@@ -66,11 +68,28 @@ def create_reviewer(
             enable_repair,
             reveal_test_output=reveal_test_output,
         )
+    if spec == "docker-command":
+        if not command:
+            raise ReviewerError("--command is required for the docker-command reviewer.")
+        if not docker_image:
+            raise ReviewerError(
+                "--docker-image is required for the docker-command reviewer: it must name "
+                "an image you built or vetted (the container is never pulled)."
+            )
+        return DockerCommandReviewer(
+            command,
+            docker_image,
+            reviewer_timeout_seconds,
+            reveal_metadata,
+            enable_repair,
+            reveal_test_output=reveal_test_output,
+        )
     raise ReviewerError(
         f"Unknown reviewer: {spec}. "
         "Available: control:<mode> (deprecated alias mock:<mode>), reference-patch, "
-        "shallow-patch (generic adversarial baseline), "
-        "custom-command, openai:<base_url> (local OpenAI-compatible servers), "
+        "shallow-patch (generic adversarial baseline), custom-command, "
+        "docker-command (containerized custom-command; needs --docker-image), "
+        "openai:<base_url> (local OpenAI-compatible servers), "
         "http:<url> (plain JSON endpoint). Benchmark a real model via custom-command "
         "or a local openai:/http: endpoint."
     )

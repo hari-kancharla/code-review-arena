@@ -5,6 +5,32 @@ Keep a Changelog conventions.
 
 ## Unreleased
 
+### Added
+
+- **`docker-command` reviewer: a blind, containerized external reviewer.** A
+  reviewer wrapper now runs in a hardened container (no network, all
+  capabilities dropped, no-new-privileges, read-only rootfs, non-root, CPU /
+  memory / PID limits, never pulled) that mounts ONLY the blind payload,
+  read-only, at `/workspace` — the isolation boundary `custom-command` cannot
+  have as a host process. Such runs record `reviewer_oracle_reachable: false`
+  and are eligible for the default leaderboard policy. Pass `--docker-image`
+  (must exist locally; never pulled) and `--command` with the same placeholder
+  template as `custom-command`; values expand to container-side payload paths.
+  Requires a trusted, locally built image. Documented in
+  `docs/docker-command-reviewer.md`. The API server gates it behind the same
+  local-execution opt-in as `custom-command`.
+
+### Fixed
+
+- Reviewer command placeholders remain literal arguments. Templates were expanded
+  before `shlex.split`, so a temporary path containing a space split into multiple
+  arguments and an apostrophe raised `ValueError: No closing quotation`, failing
+  every case. Template quoting is now parsed first and placeholder values are
+  substituted into individual arguments. `"{case_json}"`, `--case={case_json}`, and
+  unquoted placeholders all deliver the payload as a single argument. Literal
+  placeholder-like text in a value is not recursively expanded, and unknown
+  placeholders are left unchanged.
+
 ### Changed
 
 - **RealFix case data moved to its own repository.** Removed

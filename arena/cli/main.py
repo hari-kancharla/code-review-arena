@@ -125,6 +125,11 @@ def run(
     beta: float | None = typer.Option(None, "--beta", min=0.01, max=limits.BETA_MAX),
     allow_local_execution: bool = typer.Option(False, "--allow-local-execution"),
     command: str | None = typer.Option(None, "--command"),
+    docker_image: str | None = typer.Option(
+        None,
+        "--docker-image",
+        help="Image for the docker-command reviewer (never pulled; must exist locally).",
+    ),
     model: str | None = typer.Option(
         None,
         "--model",
@@ -227,6 +232,7 @@ def run(
         model_cutoff_source=model_cutoff_source,
         cutoff_grace_days=cutoff_grace_days,
         reviewer_retrieval=reviewer_retrieval,
+        docker_image=docker_image,
     )
 
 

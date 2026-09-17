@@ -83,6 +83,7 @@ def run(
     model_cutoff_source: str | None = None,
     cutoff_grace_days: int = limits.DEFAULT_CUTOFF_GRACE_DAYS,
     reviewer_retrieval: str = "unknown",
+    docker_image: str | None = None,
 ) -> None:
     # Enforce the centralized string caps before reviewer creation (Typer cannot
     # express max-length on these string options directly).
@@ -107,6 +108,7 @@ def run(
             reveal_metadata=reveal_metadata,
             enable_repair=enable_repair,
             reveal_test_output=reveal_test_output,
+            docker_image=docker_image,
         )
         result = run_benchmark(
             benchmark_set,

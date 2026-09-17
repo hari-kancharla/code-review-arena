@@ -271,6 +271,7 @@ Control reviewers (deterministic harness checks, not external model results):
 | `control:detects_no_patch` | Detects bugs without a patch |
 | `control:malformed_patch` | Supplies invalid patch output |
 | `custom-command` | Runs your local reviewer command over structured input and output |
+| `docker-command` | Runs your reviewer inside a hardened container; blind and leaderboard-eligible |
 
 `mock:<mode>` remains a deprecated alias for `control:<mode>` for one release.
 

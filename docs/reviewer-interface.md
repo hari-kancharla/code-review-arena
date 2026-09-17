@@ -45,6 +45,11 @@ placeholders are expanded per case: `{case_json}`, `{diff_file}`, `{case_id}`,
 output is parsed by `parse_reviewer_output`. See
 [custom-command-reviewer.md](custom-command-reviewer.md) for a worked example.
 
+`docker-command` runs that same wrapper inside a hardened container (no network,
+read-only payload mount, never pulled), so the review is a blind measurement:
+runs record `reviewer_oracle_reachable: false` and are eligible for the default
+leaderboard policy. See [docker-command-reviewer.md](docker-command-reviewer.md).
+
 ## Output contract: exact, invalid, and development-only salvage
 
 Exact output is the default comparable contract. The HTTP and custom-command reviewers

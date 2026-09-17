@@ -80,6 +80,11 @@ class TestExecutionRequest(BaseModel):
     # the container, so candidate code cannot rewrite them mid-run. Docker only;
     # local execution still relies on tamper detection.
     readonly_paths: list[str] = Field(default_factory=list)
+    # Mount the whole workspace read-only instead of writable. Test execution
+    # needs a writable workspace (the patch is applied before the run); a
+    # reviewer payload must be immutable evidence, so the docker-command
+    # reviewer sets this and the workspace mount becomes read-only.
+    readonly_workspace: bool = False
 
 
 class TestExecutionResult(BaseModel):
@@ -337,7 +342,8 @@ class TestExecutor:
             "-e",
             "HOME=/tmp",
             "-v",
-            f"{request.workspace_path.resolve()}:/workspace",
+            f"{request.workspace_path.resolve()}:/workspace"
+            f"{':ro' if request.readonly_workspace else ''}",
             "-w",
             "/workspace",
         ]

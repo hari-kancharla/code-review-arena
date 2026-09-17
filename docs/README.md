@@ -21,6 +21,7 @@ Start here, then read by topic.
 
 - [reviewer-interface.md](reviewer-interface.md) - the reviewer contract and built-ins
 - [custom-command-reviewer.md](custom-command-reviewer.md) - benchmark your own reviewer
+- [docker-command-reviewer.md](docker-command-reviewer.md) - the same, isolated in a hardened container
 - [reference-patches.md](reference-patches.md) - gold patch artifacts
 - [audit-pack-v1.md](audit-pack-v1.md) - the patch-required pack
 - [audit-pack-v2.md](audit-pack-v2.md) - the second batch of certified logic-defect cases
