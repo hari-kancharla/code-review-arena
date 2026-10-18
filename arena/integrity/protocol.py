@@ -29,7 +29,7 @@ from arena.integrity.models import (
 #: Bumped whenever the meaning of a recorded integrity result changes.
 INTEGRITY_PROTOCOL_VERSION = "1.0"
 #: Bumped whenever a metric definition in arena.integrity.scoring changes.
-INTEGRITY_SCORING_VERSION = "1.0"
+INTEGRITY_SCORING_VERSION = "1.1"
 
 #: The pilot runs every variant exactly once and never retries. A retried review
 #: would silently become a best-of-N measurement, which is a different experiment.

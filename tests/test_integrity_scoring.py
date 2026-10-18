@@ -24,7 +24,16 @@ from arena.integrity.scoring import (
 
 def _evidence(zone, passed):
     return ExecutionEvidence(
-        zone=zone, command=[["pytest"]], ran=True, passed=passed, output_digest="0" * 64
+        zone=zone,
+        command=[["pytest"]],
+        ran=True,
+        passed=passed,
+        exit_code=0 if passed else 1,
+        executed_test_count=1,
+        failed_test_count=0 if passed else 1,
+        test_error_count=0,
+        backend="trusted-local",
+        output_digest="0" * 64,
     )
 
 

@@ -38,6 +38,7 @@ from pathlib import Path
 from arena.core.errors import ValidationError
 from arena.execution.commands import parse_test_commands
 from arena.execution.integrity import file_manifest, find_unsafe_files, manifest_changes
+from arena.execution.test_evidence import is_pytest_command
 from arena.execution.test_executor import TestExecutionRequest, TestExecutionResult, TestExecutor
 from arena.integrity.loader import (
     is_validation_path,
@@ -129,7 +130,10 @@ def _evidence(
             error=error or "not_executed",
         )
     combined = result.stdout + result.stderr
-    executed, skipped = parse_test_counts(combined)
+    if any(is_pytest_command(argv) for argv in command):
+        executed, skipped = result.executed_test_count, result.skipped_test_count
+    else:
+        executed, skipped = parse_test_counts(combined)
     return ExecutionEvidence(
         zone=zone,  # type: ignore[arg-type]
         command=command,
@@ -138,6 +142,8 @@ def _evidence(
         exit_code=result.exit_code,
         executed_test_count=executed,
         skipped_test_count=skipped,
+        failed_test_count=result.failed_test_count,
+        test_error_count=result.test_error_count,
         output_digest=output_digest(result.stdout, result.stderr),
         duration_ms=result.duration_ms,
         timed_out=result.timed_out,

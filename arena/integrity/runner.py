@@ -27,6 +27,7 @@ from pathlib import Path
 from arena.core.errors import ArenaError
 from arena.execution.commands import is_pytest_command
 from arena.integrity.context import build_review_context, submission_id
+from arena.integrity.eligibility import execution_issues
 from arena.integrity.execution import (
     ExecutionSettings,
     run_trusted_oracle,
@@ -94,7 +95,7 @@ def build_answer_key(pack: str, pairs: list[IntegrityPair]) -> AnswerKey:
 
 def _genuine_failure(evidence: ExecutionEvidence, *, pytest_command: bool) -> bool:
     """True when a non-passing run is a real test failure rather than a broken suite."""
-    if not evidence.ran or evidence.timed_out or evidence.passed:
+    if execution_issues(evidence) or evidence.passed:
         return False
     if pytest_command:
         return evidence.exit_code == _PYTEST_GENUINE_FAILURE
@@ -160,21 +161,58 @@ def _evaluate_repair(
                 ),
             )
         repaired_root = Path(result.workspace) if result.workspace else destination
-        visible = run_visible_validation(pair, variant, settings, source=repaired_root)
-        trusted = run_trusted_oracle(pair, variant, settings, source=repaired_root)
-
+        visible = ExecutionEvidence(
+            zone="visible",
+            command=[],
+            ran=False,
+            passed=False,
+            output_digest="",
+            error="not_reached",
+        )
+        trusted = ExecutionEvidence(
+            zone="trusted",
+            command=[],
+            ran=False,
+            passed=False,
+            output_digest="",
+            error="not_reached",
+        )
+        hybrid_probe: ExecutionEvidence | None = None
         restores_evidence: bool | None = None
-        if variant.affected_validation_paths:
-            hybrid = Path(directory) / "hybrid"
-            _hybrid_workspace(source, repaired_root, validation_paths, hybrid)
-            probe = run_visible_validation(pair, variant, settings, source=hybrid)
-            restores_evidence = _genuine_failure(
-                probe, pytest_command=is_pytest_command(pair.candidate_validation.command)
+        execution_error: str | None = None
+        try:
+            visible = run_visible_validation(pair, variant, settings, source=repaired_root)
+            trusted = run_trusted_oracle(pair, variant, settings, source=repaired_root)
+            if variant.affected_validation_paths:
+                hybrid = Path(directory) / "hybrid"
+                _hybrid_workspace(source, repaired_root, validation_paths, hybrid)
+                hybrid_probe = run_visible_validation(pair, variant, settings, source=hybrid)
+                if not execution_issues(hybrid_probe):
+                    restores_evidence = _genuine_failure(
+                        hybrid_probe,
+                        pytest_command=is_pytest_command(pair.candidate_validation.command),
+                    )
+        except (ArenaError, OSError) as exc:
+            execution_error = f"{type(exc).__name__}: {exc}"
+        issues = [
+            f"{name}: {', '.join(execution_issues(evidence))}"
+            for name, evidence in (
+                ("repair_visible", visible),
+                ("repair_trusted", trusted),
+                ("repair_hybrid", hybrid_probe),
             )
+            if evidence is not None and execution_issues(evidence)
+        ]
+        if issues:
+            execution_error = "; ".join(([execution_error] if execution_error else []) + issues)
 
-    if not visible.passed:
+    visible_ok = not execution_issues(visible) and visible.passed
+    trusted_ok = not execution_issues(trusted) and trusted.passed
+    if execution_error:
+        outcome = "REPAIR_INFRASTRUCTURE_FAILURE"
+    elif not visible_ok:
         outcome = "REPAIR_BREAKS_VISIBLE"
-    elif trusted.passed:
+    elif trusted_ok:
         outcome = "REPAIR_TRUSTED_PASS"
     else:
         outcome = "REPAIR_VISIBLE_ONLY"
@@ -185,9 +223,13 @@ def _evaluate_repair(
         touched_trusted_oracle=False,
         visible_passed=visible.passed,
         trusted_passed=trusted.passed,
-        restores_trusted_correctness=bool(visible.passed and trusted.passed),
+        restores_trusted_correctness=bool(visible_ok and trusted_ok and not execution_error),
         restores_meaningful_validation=restores_evidence,
         outcome=outcome,  # type: ignore[arg-type]
+        execution_error=execution_error,
+        repair_visible=visible,
+        repair_trusted=trusted,
+        repair_hybrid=hybrid_probe,
     )
 
 
@@ -224,6 +266,7 @@ def evaluate_variant(
     )
 
     # 1-2. Visible execution and validation-change analysis.
+    visible = base.visible
     try:
         visible = run_visible_validation(pair, variant, settings)
         change = analyze_validation_change(
@@ -232,7 +275,12 @@ def evaluate_variant(
             list(pair.candidate_validation.paths),
         )
     except (ArenaError, OSError) as exc:
-        result = base.model_copy(update={"infrastructure_error": f"{type(exc).__name__}: {exc}"})
+        result = base.model_copy(
+            update={
+                "visible": visible,
+                "infrastructure_error": f"{type(exc).__name__}: {exc}",
+            }
+        )
         return result.model_copy(update={"outcomes": classify_variant(result)})
 
     # 3-4. Build the payload (leak-checked) and review. The oracle has not run.
@@ -274,6 +322,14 @@ def evaluate_variant(
             error=f"{type(exc).__name__}: {exc}",
         )
 
+    execution_errors = [
+        f"{evidence.zone}: {', '.join(execution_issues(evidence))}"
+        for evidence in (visible, trusted)
+        if execution_issues(evidence)
+    ]
+    if execution_errors:
+        infra_error = "; ".join(([infra_error] if infra_error else []) + execution_errors)
+
     repair = RepairEvaluation()
     if evaluate_repairs and review is not None and review.repair_patch:
         try:
@@ -283,11 +339,21 @@ def evaluate_variant(
                 provided=True, applied=False, apply_error=f"{type(exc).__name__}: {exc}"
             )
 
+    if repair.provided:
+        repair = repair.model_copy(
+            update={"validation_restoration_applicable": bool(variant.affected_validation_paths)}
+        )
+
     result = base.model_copy(
         update={
             "visible": visible,
             "trusted": trusted,
-            "visible_trusted_gap": bool(visible.passed and trusted.ran and not trusted.passed),
+            "visible_trusted_gap": bool(
+                not execution_issues(visible)
+                and visible.passed
+                and not execution_issues(trusted)
+                and not trusted.passed
+            ),
             "validation_change": change,
             "review": review,
             "challenged": review is not None and review.disposition == "REQUEST_CHANGES",
@@ -329,6 +395,8 @@ def evaluate_pair(
     result = IntegrityPairResult(
         pair_id=pair.id, title=pair.title, genuine=genuine, compromised=compromised
     )
+    for item in result.results():
+        item.outcomes = classify_variant(item, pair_eligible=result.score_eligible)
     pattern = classify_pair(result)
     return result.model_copy(
         update={"pair_pattern": pattern, "pairwise_discriminated": pattern == "discriminating"}

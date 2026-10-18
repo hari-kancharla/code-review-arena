@@ -23,7 +23,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, StringConstraints, model_validator
+from pydantic import BaseModel, Field, StringConstraints, computed_field, model_validator
 
 from arena.core import limits
 from arena.core.models import _StrictExternal
@@ -121,6 +121,7 @@ IntegrityOutcome = Literal[
     "COMPROMISED_FALSE_APPROVAL",
     "COMPROMISED_ABSTAINED",
     "MECHANISM_MISIDENTIFIED",
+    "REPAIR_INFRASTRUCTURE_FAILURE",
     "REPAIR_VISIBLE_ONLY",
     "REPAIR_TRUSTED_PASS",
     "REPAIR_BREAKS_VISIBLE",
@@ -130,6 +131,8 @@ IntegrityOutcome = Literal[
     "ORACLE_TOO_STRICT",
     "INVALID_PAIR",
     "INFRASTRUCTURE_FAILURE",
+    "EXECUTION_UNAVAILABLE",
+    "PAIR_INELIGIBLE",
     "REVIEWER_FAILURE",
 ]
 
@@ -464,6 +467,8 @@ class VisibleCISummary(BaseModel):
     exit_code: int | None = None
     executed_test_count: int | None = None
     skipped_test_count: int | None = None
+    failed_test_count: int | None = None
+    test_error_count: int | None = None
     duration_ms: int = 0
 
 
@@ -504,6 +509,8 @@ class ExecutionEvidence(BaseModel):
     exit_code: int | None = None
     executed_test_count: int | None = None
     skipped_test_count: int | None = None
+    failed_test_count: int | None = None
+    test_error_count: int | None = None
     #: sha256 over normalized stdout+stderr; identity of the output without the
     #: output itself, so a trusted digest can be persisted with no leak risk.
     output_digest: str
@@ -561,6 +568,11 @@ class RepairEvaluation(BaseModel):
     trusted_passed: bool | None = None
     restores_trusted_correctness: bool = False
     restores_meaningful_validation: bool | None = None
+    validation_restoration_applicable: bool = False
+    execution_error: str | None = None
+    repair_visible: ExecutionEvidence | None = None
+    repair_trusted: ExecutionEvidence | None = None
+    repair_hybrid: ExecutionEvidence | None = None
     outcome: IntegrityOutcome | None = None
 
 
@@ -590,6 +602,18 @@ class IntegrityVariantResult(BaseModel):
     outcomes: list[IntegrityOutcome] = Field(default_factory=list)
     infrastructure_error: str | None = None
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def eligibility_reasons(self) -> list[str]:
+        from arena.integrity.eligibility import variant_eligibility_reasons
+
+        return variant_eligibility_reasons(self)
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def score_eligible(self) -> bool:
+        return not self.eligibility_reasons
+
 
 class IntegrityPairResult(BaseModel):
     """Both variants of one pair, plus the pairwise judgement."""
@@ -606,6 +630,20 @@ class IntegrityPairResult(BaseModel):
         "discriminating", "approve_both", "reject_both", "inverted", "indeterminate"
     ] = "indeterminate"
 
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def eligibility_reasons(self) -> list[str]:
+        return [
+            f"{result.kind}:{reason}"
+            for result in self.results()
+            for reason in result.eligibility_reasons
+        ]
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def score_eligible(self) -> bool:
+        return not self.eligibility_reasons
+
     def results(self) -> tuple[IntegrityVariantResult, IntegrityVariantResult]:
         return (self.genuine, self.compromised)
 
@@ -613,6 +651,15 @@ class IntegrityPairResult(BaseModel):
 class IntegrityMetrics(BaseModel):
     """The reported metrics. Deliberately several, never one opaque score."""
 
+    # Attempt counts never shrink when execution or review fails.
+    pairs_attempted: int = 0
+    variants_attempted: int = 0
+    pairs_eligible: int = 0
+    repairs_attempted: int = 0
+    evidence_repairs_attempted: int = 0
+    variants_eligible: int = 0
+    eligibility_reason_counts: dict[str, int] = Field(default_factory=dict)
+    # Historical fields retained: pairs attempted and responses received.
     pairs_evaluated: int = 0
     variants_evaluated: int = 0
     integrity_attack_recall: float | None = None

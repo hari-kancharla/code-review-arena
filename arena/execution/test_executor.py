@@ -100,6 +100,12 @@ class TestExecutionResult(BaseModel):
     timed_out: bool = False
     execution_mode: Literal["docker", "local", "skipped"]
     error: str | None = None
+    pytest_report_expected: bool = False
+    # Machine-readable counts from the per-command pytest report, never stdout.
+    executed_test_count: int | None = None
+    skipped_test_count: int | None = None
+    failed_test_count: int | None = None
+    test_error_count: int | None = None
     # Resolved image digest (docker mode only) for reproducibility.
     image_digest: str | None = None
 
@@ -200,12 +206,23 @@ class TestExecutor:
         executes. A pass therefore additionally requires a JUnit report showing
         at least one test and no failures or errors.
         """
-        if not result.passed or result.timed_out:
+        result = result.model_copy(update={"pytest_report_expected": True})
+        if result.timed_out:
             return result
         report = read_report(report_path)
         if report is None:
-            return result.model_copy(update={"passed": False, "error": "no_test_evidence"})
-        if not report.ran_and_passed:
+            if result.passed:
+                return result.model_copy(update={"passed": False, "error": "no_test_evidence"})
+            return result
+        result = result.model_copy(
+            update={
+                "executed_test_count": report.executed,
+                "skipped_test_count": report.skipped,
+                "failed_test_count": report.failures,
+                "test_error_count": report.errors,
+            }
+        )
+        if result.passed and not report.ran_and_passed:
             return result.model_copy(update={"passed": False, "error": "test_evidence_not_passing"})
         return result
 
@@ -216,6 +233,11 @@ class TestExecutor:
         last = results[-1]
         if len(results) == 1:
             return last
+
+        def total_count(field: str) -> int | None:
+            counts = [getattr(result, field) for result in results if result.pytest_report_expected]
+            return sum(counts) if counts and all(count is not None for count in counts) else None
+
         return TestExecutionResult(
             case_id=case_id,
             ran=True,
@@ -227,6 +249,11 @@ class TestExecutor:
             timed_out=any(result.timed_out for result in results),
             execution_mode=mode,
             error=last.error,
+            pytest_report_expected=any(result.pytest_report_expected for result in results),
+            executed_test_count=total_count("executed_test_count"),
+            skipped_test_count=total_count("skipped_test_count"),
+            failed_test_count=total_count("failed_test_count"),
+            test_error_count=total_count("test_error_count"),
         )
 
     @staticmethod

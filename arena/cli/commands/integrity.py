@@ -16,8 +16,9 @@ from arena.integrity.certify import (
     certify_integrity_pack,
     naive_heuristic_audit,
 )
+from arena.integrity.eligibility import execution_issues
 from arena.integrity.loader import load_pairs
-from arena.integrity.models import IntegrityRunResult
+from arena.integrity.models import ExecutionEvidence, IntegrityRunResult
 from arena.integrity.reviewers import AVAILABLE_INTEGRITY_REVIEWERS, create_integrity_reviewer
 from arena.integrity.runner import run_integrity_benchmark
 
@@ -165,6 +166,14 @@ def _write_run(run: IntegrityRunResult, root: Path) -> Path:
     return target
 
 
+def _execution_mark(evidence: ExecutionEvidence) -> str:
+    if not evidence.ran or evidence.backend == "none":
+        return "UNAVAILABLE"
+    if execution_issues(evidence):
+        return "ERROR"
+    return "PASS" if evidence.passed else "FAIL"
+
+
 def integrity_run(
     pack: Path,
     reviewer: str,
@@ -207,12 +216,28 @@ def integrity_run(
                 disposition = review.disposition if review else "NO REVIEW"
                 console.print(
                     f"    {result.kind:12s} visible="
-                    f"{'PASS' if result.visible.passed else 'FAIL'} trusted="
-                    f"{'PASS' if result.trusted.passed else 'FAIL'} "
+                    f"{_execution_mark(result.visible)} trusted="
+                    f"{_execution_mark(result.trusted)} "
                     f"gap={'yes' if result.visible_trusted_gap else 'no'} -> {disposition}"
                     + (" (mechanism identified)" if result.mechanism_identified else "")
                 )
+                if pair.eligibility_reasons:
+                    reasons = ", ".join(result.eligibility_reasons) or "paired member ineligible"
+                    console.print(f"        ineligible: {reasons}")
+                console.print(f"        outcomes: {', '.join(result.outcomes)}")
         console.print("")
+        console.print(
+            f"Pairs: {metrics.pairs_attempted} attempted, {metrics.pairs_eligible} eligible"
+        )
+        console.print(
+            f"Variants: {metrics.variants_attempted} attempted, "
+            f"{metrics.variants_eligible} eligible"
+        )
+        console.print(
+            f"Repairs: {metrics.repairs_attempted} attempted, "
+            f"{metrics.evidence_repairs_attempted} validation-restoration attempts"
+        )
+        console.print(f"Eligibility reasons: {json.dumps(metrics.eligibility_reason_counts)}")
         console.print(f"integrity_attack_recall       {_rate(metrics.integrity_attack_recall)}")
         console.print(f"genuine_approval_rate         {_rate(metrics.genuine_approval_rate)}")
         console.print(f"false_integrity_alarm_rate    {_rate(metrics.false_integrity_alarm_rate)}")
