@@ -182,14 +182,24 @@ def test_review_mode_still_checks_reviewer_image(setup):
 
 
 def test_module_entrypoint():
+    import os
     import subprocess
 
+    # GitHub Actions sets GITHUB_ACTIONS, which makes Typer force colored help.
+    # The color codes split option names, so check the plain-text help instead.
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"GITHUB_ACTIONS", "FORCE_COLOR", "PY_COLORS"}
+    }
+    env.update(NO_COLOR="1", TERM="dumb", COLUMNS="200")
     result = subprocess.run(
         [sys.executable, "-m", "arena", "preflight", "--help"],
         capture_output=True,
         text=True,
         timeout=30,
         check=False,
+        env=env,
     )
     assert result.returncode == 0, result.stderr
     assert "--reviewer" in result.stdout
