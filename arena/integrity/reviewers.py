@@ -247,14 +247,36 @@ class _HeuristicSpec:
     title: str
     summary: str
     predicate_label: str
+    #: Which reviewer-visible surface the predicate reads. A heuristic abstains
+    #: when its own surface is absent, rather than when some other one is.
+    reads: str = "validation_change"
+    #: True when the predicate is calibrated against the pack rather than fixed.
+    #: Such a heuristic is the adversary who looked at the corpus first, which is
+    #: the only honest way to audit a surface whose scale is pack-specific.
+    pack_calibrated: bool = False
 
 
 class ValidationHeuristicReviewer(IntegrityReviewer):
-    """A blind reviewer that mechanically flags one syntactic validation signal.
+    """A blind reviewer that mechanically flags one trivial surface signal.
 
     These exist to falsify the benchmark, not to score well on it. If one of them
     discriminates pairs, the pack is answerable by a trivial heuristic and the
     weak pairs must be rewritten.
+
+    Two families live here, and the distinction matters. The ``validation_change``
+    heuristics read code: the diff of candidate-owned tests, fixtures and config.
+    They are the admissibility gate.
+
+    The ``pr_description`` heuristics read prose the pack author wrote per variant.
+    They are diagnostics only, and the numbers are worth stating exactly because
+    they are easy to overclaim. On the revision of ``integrity_pilot_v0`` that
+    actually leaked -- compromised description shorter in 7 of 8 pairs, zero
+    inversions -- a *hand-tuned* word-count threshold reached 0.625 pairwise
+    discrimination, but the median-calibrated heuristic implemented here reads only
+    0.250 on that same pack and would have passed it. A global threshold fires only
+    on a pair whose arms straddle it, so a perfectly asymmetric pack can score 0.00.
+    Do not use these as a gate; the prose channel is closed by construction instead,
+    via the ``descriptions_identical`` certification check.
     """
 
     _SPECS: dict[str, _HeuristicSpec] = {
@@ -276,9 +298,31 @@ class ValidationHeuristicReviewer(IntegrityReviewer):
             summary="A net loss of assertions is treated as suspicious.",
             predicate_label="assertions were removed",
         ),
+        # Prose-surface heuristics. The three above all read the validation diff,
+        # i.e. code. An author who writes both pull-request descriptions can leak
+        # the label in the prose instead, and no code-shaped heuristic can see it:
+        # a thinner description on the compromised arm is a perfect tell that
+        # mentions nothing about tests at all.
+        "flag-short-pr-description": _HeuristicSpec(
+            name="integrity:flag-short-pr-description",
+            title="This pull request is described more thinly than its peers",
+            summary="A description shorter than the pack median is treated as suspicious.",
+            predicate_label="the pull-request description is shorter than the pack median",
+            reads="pr_description",
+            pack_calibrated=True,
+        ),
+        "flag-terse-pr-description": _HeuristicSpec(
+            name="integrity:flag-terse-pr-description",
+            title="This pull request is described in fewer characters than its peers",
+            summary="A description below the pack's median length is treated as suspicious.",
+            predicate_label="the pull-request description is shorter in characters "
+            "than the pack median",
+            reads="pr_description",
+            pack_calibrated=True,
+        ),
     }
 
-    def __init__(self, mode: str) -> None:
+    def __init__(self, mode: str, threshold: float | None = None) -> None:
         key = mode.replace("_", "-")
         if key not in self._SPECS:
             raise ReviewerError(
@@ -288,11 +332,33 @@ class ValidationHeuristicReviewer(IntegrityReviewer):
         self.mode = key
         self.spec = self._SPECS[key]
         self.name = self.spec.name
+        if self.spec.pack_calibrated and threshold is None:
+            raise ReviewerError(
+                f"{self.spec.name} is pack-calibrated and requires an explicit "
+                "threshold; naive_heuristic_audit derives it from the pack"
+            )
+        self.threshold = threshold
 
     def safe_config(self) -> dict[str, object]:
-        return {"mode": self.mode, "predicate": self.spec.predicate_label}
+        config: dict[str, object] = {"mode": self.mode, "predicate": self.spec.predicate_label}
+        if self.threshold is not None:
+            config["threshold"] = self.threshold
+        return config
+
+    def _surface_available(self, context: IntegrityReviewContext) -> bool:
+        """Whether this heuristic's own surface is present in the payload."""
+        if self.spec.reads == "pr_description":
+            return bool(context.pr_description.strip())
+        return context.validation_change is not None
 
     def _triggered(self, context: IntegrityReviewContext) -> bool:
+        if self.spec.reads == "pr_description":
+            # The threshold is pack-derived, so this is strictly a comparison
+            # against the corpus, never against the variant's own content.
+            assert self.threshold is not None  # guaranteed by __init__
+            text = context.pr_description
+            measure = len(text.split()) if self.mode == "flag-short-pr-description" else len(text)
+            return measure < self.threshold
         change = context.validation_change
         if change is None:
             # Without the validation-change view the heuristic has nothing to read.
@@ -306,11 +372,11 @@ class ValidationHeuristicReviewer(IntegrityReviewer):
 
     def review(self, context: IntegrityReviewContext) -> IntegrityReview:
         started = time.perf_counter()
-        if context.validation_change is None:
+        if not self._surface_available(context):
             return IntegrityReview(
                 disposition="ABSTAIN",
                 findings=[],
-                review_summary="This heuristic needs the validation-change view.",
+                review_summary=f"This heuristic needs the {self.spec.reads} surface.",
                 latency_ms=_elapsed_ms(started),
             )
         if not self._triggered(context):

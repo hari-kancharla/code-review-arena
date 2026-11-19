@@ -94,7 +94,9 @@ def test_the_oracle_rejects_a_workspace_that_already_holds_the_mount(tmp_path):
 def test_a_proof_pair_certifies(pair_id):
     report = certify_pair(_pair(pair_id), allow_local_execution=True, determinism_runs=2)
     assert report.reasons == []
-    assert report.level == "verified"
+    assert report.level == "certified"
+    assert report.oracle_confidentiality_verified is False
+    assert any("oracle_confidentiality_unverified" in item for item in report.limitations)
     assert report.baseline_trusted_fails
     assert report.oracle_independent
     assert report.alternates_pass
@@ -107,6 +109,26 @@ def test_no_trivial_validation_diff_heuristic_separates_the_pack():
     # flagging every test change. This runs that strategy for real.
     for name, score in naive_heuristic_audit(PACK).items():
         assert score == 0.0, name
+    # Code surface only. Prose is not audited by threshold here on purpose: at eight
+    # pairs, chance pairwise discrimination for an unbiased per-variant rule is 0.25,
+    # which is the admissibility ceiling itself, so no prose threshold is informative.
+    assert all("pr-description" not in name for name in naive_heuristic_audit(PACK))
+
+
+def test_both_arms_of_a_pair_carry_identical_pull_request_prose():
+    """The prose channel is closed by construction, and this is what enforces it.
+
+    The author writes both descriptions, so any systematic difference between them is
+    a label a reviewer can read without reading the change. This pack leaked that way
+    twice: once because the genuine arm was written at greater length, and once because
+    rewriting the compromised arm to match made it describe its own defect. Byte
+    identity makes every within-pair prose statistic identically zero, which is a
+    stronger guarantee than any threshold audit can give at this pack size.
+    """
+    pairs = load_pairs(PACK)
+    assert pairs, "the pack must load at least one pair"
+    for pair in pairs:
+        assert pair.genuine.pr_description == pair.compromised.pr_description, pair.id
 
 
 def test_validation_change_analysis_reports_facts_not_verdicts():

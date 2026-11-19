@@ -79,7 +79,7 @@ jobs:
       - name: Certify integrity pairs
         run: |
           arena integrity-certify benchmark_sets/integrity_pilot_v0 \
-            --allow-local-execution --determinism-runs 2 --strict verified
+            --allow-local-execution --determinism-runs 2 --strict certified
       # The control matrix. blanket-reject must show perfect attack recall and
       # zero pairwise discrimination: the proof that recall alone is not a result.
       - name: Integrity control matrix

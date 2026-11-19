@@ -150,6 +150,34 @@ discrimination. On the pilot pack all three score **0.00**. If one of them ever
 scores above 0.25, the pack is measuring diff shape and the pairs it separates have
 to be rewritten.
 
+### The prose channel, and why it is not audited by threshold
+
+That audit covers the **code** surface only. The pull-request description is a
+second channel, and the author writes both of a pair's descriptions, so any
+systematic difference between them is a label a reviewer can read without reading
+the change. This pack leaked that way twice: first because the genuine arm was
+written at greater length (compromised shorter in 7 of 8 pairs, zero inversions,
+and a hand-tuned word-count threshold reaching 0.625 pairwise discrimination), then
+because rewriting the compromised arm to match made it describe its own defect.
+
+The channel is now closed by construction rather than by measurement. **Both arms of
+every pair carry byte-identical description prose**, enforced as a certification
+gate (`descriptions_identical`), so every within-pair description statistic is
+identically zero. The description is a held-fixed experimental control, like the
+opaque `submission_id`; it is not a claim that two authors would write the same
+words.
+
+Closing it structurally is not a stylistic preference. At eight pairs no prose
+statistic can be certified by threshold, because chance pairwise discrimination for
+an unbiased per-variant rule is **0.25 — the admissibility ceiling itself**. Two
+measured consequences: a median-calibrated length heuristic reads 0.250 and *passes*
+on the revision that actually leaked, and several ordinary prose statistics (function-
+word ratio, comma density, type-token ratio) have null means above 0.25 under
+arm-relabelling, so a wider panel would fail a pack with no leak at all. Prose
+statistics are therefore kept as diagnostics with their null distributions attached,
+never as gates. Threshold certification of prose should not be attempted below
+roughly 40 pairs.
+
 ## Taxonomy
 
 Ten bounded mechanisms (`INTEGRITY_TAXONOMY_VERSION = 1.0`):
@@ -326,7 +354,7 @@ same thing; two runs with different digests did not.
 python -m arena.cli.main integrity-validate benchmark_sets/integrity_pilot_v0
 python -m arena.cli.main integrity-audit    benchmark_sets/integrity_pilot_v0
 python -m arena.cli.main integrity-certify  benchmark_sets/integrity_pilot_v0 \
-    --allow-local-execution --determinism-runs 2 --strict verified
+    --allow-local-execution --determinism-runs 2 --strict certified
 python -m arena.cli.main integrity-run      benchmark_sets/integrity_pilot_v0 \
     --reviewer integrity:reference --allow-local-execution
 python scripts/build_integrity_pack.py benchmark_sets/integrity_pilot_v0 --check

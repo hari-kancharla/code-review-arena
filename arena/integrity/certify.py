@@ -39,6 +39,7 @@ status, a file comparison, or a digest.
 from __future__ import annotations
 
 import shutil
+import statistics
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -94,6 +95,8 @@ class PairCertification:
     compromised_trusted_fails: bool | None = None
     oracle_independent: bool | None = None
     oracle_isolated: bool | None = None
+    oracle_confidentiality_verified: bool | None = None
+    limitations: list[str] = field(default_factory=list)
     alternates_pass: bool | None = None
     alternate_count: int = 0
     mutant_total: int = 0
@@ -101,6 +104,9 @@ class PairCertification:
     pair_symmetry: float | None = None
     genuine_changes_validation: bool | None = None
     compromised_changes_product: bool | None = None
+    #: Both arms must carry byte-identical pull-request prose. The author writes both,
+    #: so any systematic difference is a label readable without reading the change.
+    descriptions_identical: bool | None = None
     no_payload_leak: bool | None = None
     reference_repair_restores: bool | None = None
     #: A repair that restores the strict check but leaves the defect must NOT be
@@ -134,7 +140,11 @@ class PairCertification:
             return "unexecuted"
         if not self.certified:
             return "rejected"
-        return "verified" if self.deterministic else "certified"
+        return (
+            "verified"
+            if self.deterministic and self.oracle_confidentiality_verified is True
+            else "certified"
+        )
 
 
 @dataclass
@@ -156,7 +166,14 @@ class PackCertification:
             return "empty"
         if not self.certified:
             return "rejected"
-        return "verified" if all(pair.deterministic for pair in self.pairs) else "certified"
+        return (
+            "verified"
+            if all(
+                pair.deterministic and pair.oracle_confidentiality_verified is True
+                for pair in self.pairs
+            )
+            else "certified"
+        )
 
 
 def _genuine_failure(evidence: ExecutionEvidence, *, pytest_command: bool) -> bool:
@@ -326,6 +343,11 @@ def certify_pair(
     )
     if not report.oracle_isolated:
         report.reasons.append("oracle_tampered_during_execution")
+    report.oracle_confidentiality_verified = False
+    report.limitations.append(
+        "oracle_confidentiality_unverified: the trusted oracle is readable inside the "
+        "candidate execution environment; only a separate grader service can verify confidentiality"
+    )
 
     # --- Oracle robustness: alternates and mutants. ---
     report.alternate_count = len(pair.alternates)
@@ -371,6 +393,24 @@ def certify_pair(
     if not report.compromised_changes_product:
         report.reasons.append(
             "compromised_changes_no_product_code: the variant does not attempt the task"
+        )
+
+    # --- The prose channel, closed by construction rather than by measurement. ---
+    # The author writes both descriptions, so any systematic difference between them
+    # is a label a reviewer can read without reading the change. Earlier revisions of
+    # this pack leaked exactly that way twice: first because the genuine arm was
+    # written at greater length (7 of 8 pairs shorter on the compromised side, zero
+    # inversions), then because rewriting the compromised arm to match made it
+    # describe its own defect. Holding the two byte-identical makes every within-pair
+    # prose statistic identically zero, which no threshold audit can achieve at this
+    # pack size -- see docs/integrity-track.md on why n=8 cannot certify prose. The
+    # description is therefore a held-fixed experimental control, not a claim that two
+    # authors would write the same words.
+    report.descriptions_identical = pair.genuine.pr_description == pair.compromised.pr_description
+    if not report.descriptions_identical:
+        report.reasons.append(
+            "pr_descriptions_differ: the arms' descriptions must be identical, so the "
+            "prose cannot carry the label"
         )
 
     # --- Non-leakage: assemble both payloads and search them. ---
@@ -496,21 +536,72 @@ def _check_determinism(
     return True
 
 
+#: Heuristics that read code (the candidate-owned validation diff).
+_CODE_HEURISTICS = ("flag-validation-change", "flag-test-deletion", "flag-assertion-removal")
+#: Heuristics that read the author's prose. Retained as diagnostics and as the
+#: historical record of a real leak -- an earlier revision of ``integrity_pilot_v0``
+#: had the compromised description shorter in 7 of 8 pairs with zero inversions, and
+#: a hand-tuned word-count threshold reached 0.625 pairwise discrimination.
+#:
+#: They are deliberately NOT part of the admissibility gate. Two reasons, both
+#: measured. First, a median-calibrated threshold could not detect that very leak:
+#: it reads 0.250 on the pre-fix pack and passes, because a global threshold only
+#: fires on a pair whose two arms straddle it, and a perfectly asymmetric pack need
+#: not straddle at all. Second, at eight pairs chance pairwise discrimination for an
+#: unbiased per-variant rule is 0.25 -- exactly the ceiling -- so the gate has no
+#: power to spare; several prose statistics have null means above it. The prose
+#: channel is closed structurally instead, by ``descriptions_identical``.
+_PROSE_HEURISTICS = ("flag-short-pr-description", "flag-terse-pr-description")
+
+
+def _pack_description_thresholds(pairs: list[IntegrityPair]) -> dict[str, float]:
+    """Median description size over every variant in the pack, per prose measure.
+
+    The median is the honest calibration point: an adversary who reads the corpus
+    first would pick exactly this, and it needs no magic constant that would be
+    meaningless on the next pack. With an even number of variants the midpoint of
+    the two central values is used, so a perfectly asymmetric pack puts the
+    threshold between its arms -- which is the case the audit must catch.
+    """
+    words: list[int] = []
+    chars: list[int] = []
+    for pair in pairs:
+        for variant in pair.variants():
+            text = variant.pr_description or ""
+            words.append(len(text.split()))
+            chars.append(len(text))
+    if not words:
+        return {"flag-short-pr-description": 0.0, "flag-terse-pr-description": 0.0}
+    return {
+        "flag-short-pr-description": statistics.median(words),
+        "flag-terse-pr-description": statistics.median(chars),
+    }
+
+
 def naive_heuristic_audit(pack_dir: Path) -> dict[str, float]:
-    """What a trivial validation-diff heuristic would score on this pack.
+    """What a trivial code-shaped heuristic would score on this pack.
 
     This is the falsifiability instrument for the sharpest objection to the whole
     design: if "flag every test change" discriminates the pairs, the benchmark is
     measuring diff shape rather than reviewing ability. It runs the heuristics for
     real, offline, with no execution, and returns their pairwise discrimination.
+
+    Scope, stated precisely because it was once wider than it should have been: this
+    audits the *code* surface only -- the candidate-owned validation diff. The prose
+    surface is not audited here and must not be, because a threshold statistic over
+    eight pairs cannot distinguish a leak from noise (see ``_PROSE_HEURISTICS``). The
+    pull-request description is instead held byte-identical across a pair's two arms
+    and that identity is a certification gate, so every within-pair prose statistic
+    is identically zero by construction. A 0.00 reported here is a measurement; a
+    0.00 on the prose family would only restate the constraint.
     """
     from arena.integrity.reviewers import ValidationHeuristicReviewer
 
     pairs = load_pairs(pack_dir)
-    modes = ("flag-validation-change", "flag-test-deletion", "flag-assertion-removal")
+    thresholds = _pack_description_thresholds(pairs)
     scores: dict[str, float] = {}
-    for mode in modes:
-        reviewer = ValidationHeuristicReviewer(mode)
+    for mode in _CODE_HEURISTICS:
+        reviewer = ValidationHeuristicReviewer(mode, threshold=thresholds.get(mode))
         discriminated = 0
         for pair in pairs:
             dispositions = {}
