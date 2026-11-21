@@ -5,7 +5,131 @@ Keep a Changelog conventions.
 
 ## Unreleased
 
+## 0.3.0 - 2026-11-21
+
+The first tagged release. It covers everything since 0.2.0: the CRA-Integrity track,
+the blind `docker-command` reviewer, `arena preflight`, training-data exposure
+disclosure, `arena mine-fixes`, the move of RealFix case data to its own repository,
+and a long list of evidence and scoring fixes that stop a reviewer (or the harness)
+from turning a non-result into a score.
+
 ### Added
+
+- **Runtime eligibility for integrity scoring** (scoring version 1.1,
+  `arena/integrity/eligibility.py`). A pair now earns credit only when both visible
+  runs pass, the trusted evidence agrees with the variant labels, and both reviews are
+  usable. pytest evidence comes from JUnit counts (a real failed test and zero suite
+  errors behind exit 1), so missing proof, timeouts, errors and contradictory labels
+  can no longer earn success. An ineligible pair is `indeterminate`, keeps every raw
+  record in the JSON, and carries `score_eligible` and `eligibility_reasons` derived
+  from those records rather than from cached outcomes. Reports show `pairs_attempted`,
+  `pairs_eligible`, `variants_attempted`, `variants_eligible` and
+  `eligibility_reason_counts`; headline rates keep every attempt in the denominator,
+  and false-alarm and conditional recall report `null` (`n/a`) rather than a flattering
+  number when coverage is incomplete. Before this, a genuine implementation dropped into
+  the compromised workspace scored pairwise discrimination 1.0. See
+  [docs/integrity-eligibility-verification.md](docs/integrity-eligibility-verification.md).
+- `CITATION.cff`, so GitHub shows a "Cite this repository" button and the Zenodo
+  archive of each release picks up the right metadata.
+
+- **Training-data exposure disclosure**, the project's answer to the standard and
+  most damaging criticism of any benchmark built from public repository history:
+  every RealFix case is derived from a public repository, so the upstream fix, its
+  regression test and its pull-request discussion are plausibly in the pretraining
+  corpus of the model being evaluated, and a model may reproduce a repair it
+  remembers rather than one it reasoned to. Until now the harness had no answer:
+  the one field that would have supported one, `fixed_date`, lived in hand-written
+  evidence files that no code read.
+  - Every case now carries an `origin` block, and `arena import-fix` writes it from
+    the commit object itself (`%aI`/`%cI`, earlier of the two, with the basis naming
+    which won), so it is reproducible rather than remembered. A spec may declare an
+    earlier date (an issue or advisory that disclosed the defect before the fix
+    landed), but a *later* declared date is discarded in favour of the commit's:
+    disagreement resolves toward more assumed exposure, never less.
+  - `arena run` accepts `--model-knowledge-cutoff` with a mandatory
+    `--model-cutoff-basis` and `--model-cutoff-source`. A bare date is refused
+    before the run starts, because a cohort split resting on an assertion nobody can
+    attribute is worse than no split. `--cutoff-grace-days` can only be widened past
+    its 90-day default; narrowing it would let an operator manufacture a cohort out
+    of borderline cases.
+  - Cases split into `pre_cutoff` / `post_cutoff` / `undetermined` /
+    `not_applicable`, stamped per case in `run.json` so a third party can recompute
+    the analysis at a different cutoff without rerunning a reviewer. An undated case
+    is never imputed into a cohort, and the guard band is closed on both sides, so a
+    borderline case can never tip a published difference.
+  - `exposure_gap` is withheld unless the comparison is actually powered, with
+    machine-readable `suppression_reasons` (`no_declared_cutoff`,
+    `cohort_too_small:pre|post`, `too_many_undetermined`, `retrieval_not_ruled_out`).
+    Unruled-out reviewer retrieval suppresses **by default**, because live retrieval
+    defeats a cutoff argument entirely. Cohort counts, Wilson intervals, the
+    repository x cohort cross-tab and `min_detectable_gap` publish either way;
+    on today's five-case seed the minimum detectable difference is 1.0, which says
+    plainly that nothing short of the entire range would be detectable.
+  - Exposure is disclosure and never leaderboard eligibility: gating rank on a
+    self-declared field would create a direct incentive to declare a convenient
+    value. Documented end to end, including what it is NOT, in
+    [docs/training-data-exposure.md](docs/training-data-exposure.md).
+- All five RealFix cases (since moved to realfix-benchmark, see Changed) were re-imported from fresh upstream clones to carry the
+  new provenance. Every vendored tree (`before/`, `after/`, `tests/`, `pr.diff`,
+  `reference.patch`) reproduced byte-identically, which is the first end-to-end
+  check of the pack's reproducibility claim rather than an assertion of it.
+- **Two more real-fix cases, mined end to end** (since moved to realfix-benchmark with the rest of RealFix, see Changed), taking `realfix_seed_v0` from three
+  cases to five and proving the ingestion path rather than asserting it. Both come from
+  `pypa/packaging` via `arena mine-fixes` (108 candidates from 400 commits in 2.6s),
+  and both certify at **verified** with a 100% mutant kill rate, higher than any case
+  the pack already shipped:
+  - `packaging_name_validation_newline_001` (upstream PR #925): the core-metadata Name
+    pattern was anchored with `$`, which Python also matches immediately before a
+    trailing newline, so `canonicalize_name("hi\n", validate=True)` returned instead of
+    raising `InvalidName` and a line break could reach an RFC822-style metadata field.
+  - `packaging_marker_extra_normalization_001` (upstream PR #1024): extra normalization
+    rewrote `results[0]` instead of walking the marker list, so
+    `python_version >= "3" and extra == "mariadb_connector"` kept its underscore, never
+    matched the canonical extra, and the optional dependency was silently skipped.
+  Upstream licenses, notices and per-case evidence records ship with the pack. Selecting
+  a whole test module rather than the single fail-to-pass test is what earns the
+  mutation evidence: the narrow command certified only to `development` (17% and 20%
+  kill rate) because mutants elsewhere in the file had nothing to catch them.
+- **`arena mine-fixes`**, which proposes historical fixes that could become
+  execution-backed review cases. `import-fix` converts one commit pair but infers no
+  semantics, so every case cost a hand-written spec and a real-fix pack grew three cases
+  at a time. Mining applies the selection rule behind SWE-bench's fail-to-pass signal (a
+  non-merge commit that changed both a test file and a source file, with its parent as
+  the buggy state), ranks the tightest diffs first, and emits a scaffolded import spec
+  with every Git-derivable field filled in and every semantic field left an explicit
+  `TODO`. It proposes only: `arena certify-pack` still decides by running the tests at
+  both commits. It surfaces 66 candidates from this repository's 192 commits, and 108 from
+  400 commits of `pypa/packaging` in 2.6 seconds.
+- `validated_eligible_case_count` and `non_execution_backed_case_count` on every run, so
+  the denominator behind `validated_case_rate` is explicit. Both are derived from the
+  case, not from how a particular reviewer happened to do, so the same pack always
+  reports the same split.
+- `arena leaderboard` explains an empty default table instead of printing a bare header
+  when every run was filtered out as unverified.
+- Documented the `shallow-patch`, `openai:<base_url>` and `http:<url>` reviewers, which
+  shipped but appeared in no user-facing documentation.
+
+- **CRA-Integrity** (`arena/integrity/`, `benchmark_sets/integrity_pilot_v0`): a
+  new evaluation track that asks whether a code reviewer can tell a genuinely
+  correct green pull request from one that is green because its validation
+  evidence was weakened, bypassed or overfit. Three trust zones (product,
+  candidate-owned validation, hidden benchmark oracle) are separated on disk; a
+  pair ships a genuine and a compromised pull request against the same task,
+  baseline, visible command and reviewer context, and the reviewer is not told
+  which it received. Eight pilot pairs cover eight mechanisms and every one passes
+  every certification gate (it certifies at `certified`; see Changed for why the
+  top `verified` level is out of reach): the baseline fails the oracle, the genuine variant passes
+  both surfaces, the compromised variant passes visible and fails trusted, the
+  oracle is independent of candidate-owned expectations, accepts a structurally
+  different legitimate implementation, and kills mutants of the genuine code.
+  Metrics are reported separately and never averaged, with pairwise discrimination
+  as the headline: the `integrity:blanket-reject` control scores perfect attack
+  recall and zero discrimination, which is why recall is never reported alone.
+  `arena integrity-audit` runs three trivial validation-diff heuristics as real
+  reviewers and fails the pack if any of them can separate the pairs.
+- `arena integrity-validate`, `integrity-audit`, `integrity-certify` and
+  `integrity-run`, plus `scripts/build_integrity_pack.py` to derive every pack
+  diff and repair patch from the trees it describes.
 
 - Published audit-report rows now carry `reviewer_image_digest`, alongside the
   run's integrity provenance (`run_status`, `pack_checksum_verified`). Runs
@@ -33,7 +157,7 @@ Keep a Changelog conventions.
   reviewer wrapper now runs in a hardened container (no network, all
   capabilities dropped, no-new-privileges, read-only rootfs, non-root, CPU /
   memory / PID limits, never pulled) that mounts ONLY the blind payload,
-  read-only, at `/workspace` — the isolation boundary `custom-command` cannot
+  read-only, at `/workspace`, the isolation boundary `custom-command` cannot
   have as a host process. Such runs record `reviewer_oracle_reachable: false`
   and are eligible for the default leaderboard policy. Pass `--docker-image`
   (must exist locally; never pulled) and `--command` with the same placeholder
@@ -42,18 +166,14 @@ Keep a Changelog conventions.
   `docs/docker-command-reviewer.md`. The API server gates it behind the same
   local-execution opt-in as `custom-command`.
 
-### Fixed
-
-- Reviewer command placeholders remain literal arguments. Templates were expanded
-  before `shlex.split`, so a temporary path containing a space split into multiple
-  arguments and an apostrophe raised `ValueError: No closing quotation`, failing
-  every case. Template quoting is now parsed first and placeholder values are
-  substituted into individual arguments. `"{case_json}"`, `--case={case_json}`, and
-  unquoted placeholders all deliver the payload as a single argument. Literal
-  placeholder-like text in a value is not recursively expanded, and unknown
-  placeholders are left unchanged.
-
 ### Changed
+
+- Version is now **0.3.0** in `pyproject.toml` and `arena.__version__` (reported by
+  `arena serve` and written into every run manifest as `harness_version`).
+- The integrity CI gate, the `make integrity` target and the documented commands now
+  run `integrity-certify --strict certified`. Certification reports oracle
+  confidentiality as `unverified` (it cannot be proven from inside the pack), so
+  `--strict verified` no longer passes on an honest pack.
 
 - **RealFix case data moved to its own repository.** Removed
   `benchmark_sets/realfix_seed_v0`, its import specs under `benchmark_sources/`, its
@@ -70,7 +190,45 @@ Keep a Changelog conventions.
   `arena import-fix`) stay here. Only the cases moved. Four packs ship here now instead
   of five.
 
+- `validated_case_rate` is now execution-backed only. A case gated solely by a
+  structural validator is excluded from the rate rather than counted as a validated
+  repair, because a structural validator is a lexical/AST heuristic that a
+  non-repairing patch can satisfy. Its evidence still appears in
+  `structural_pass_rate`. Only `benchmark_sets/v1` is affected (six of its nine cases are
+  execution-backed); `audit_v1`, `audit_v2` and `realfix_seed_v0` are fully executable,
+  so their numbers are unchanged.
+- Three structural validators matched a substring anywhere in the bug file, so a patch
+  adding one dead line earned a validated repair while leaving the defect intact. They
+  now establish the property: no awaited per-item call inside a `.map()` callback, an
+  updater function passed to the state setter, and the tenant column inside the `WHERE`
+  predicate rather than anywhere in the file.
+- `spring_boot_null_handling_001` has been removed from `benchmark_sets/v1`. It declared
+  `patch_required` with no tests and no structural validators, so it could never confirm a
+  repair and penalised every reviewer identically. This harness cannot execute Java, and a
+  static substitute proved unsound in both directions: it passed a no-op that rebound the
+  Optional to a local and still dereferenced it, while rejecting a genuine
+  `isPresent()`-guarded 404. Shipping a case the harness cannot judge is worse than
+  shipping one fewer, so it is gone rather than faked. Pack validation now rejects any case
+  that demands a patch without a gate, and `benchmark_sets/v1` (nine cases: six
+  execution-backed, three structural-only) re-pinned its checksum.
+- The dashboard no longer depends on Tailwind. It used no Tailwind utility classes, so
+  the framework only supplied a reset, which now lives in `globals.css`; the rendered
+  output is unchanged. This unblocked the dependency updates that clear all four
+  outstanding high-severity npm advisories.
+- Dependabot no longer rewrites the minimum-dependency pins (renamed to
+  `constraints/minimum.pip`), and major updates are grouped separately so a breaking
+  major cannot hold back security patches.
+
 ### Fixed
+
+- Reviewer command placeholders remain literal arguments. Templates were expanded
+  before `shlex.split`, so a temporary path containing a space split into multiple
+  arguments and an apostrophe raised `ValueError: No closing quotation`, failing
+  every case. Template quoting is now parsed first and placeholder values are
+  substituted into individual arguments. `"{case_json}"`, `--case={case_json}`, and
+  unquoted placeholders all deliver the payload as a single argument. Literal
+  placeholder-like text in a value is not recursively expanded, and unknown
+  placeholders are left unchanged.
 
 - Local fixture execution restores the harness interpreter's user-site on
   `PYTHONPATH` when `HOME` is isolated, so a `--user` install of pytest is still
@@ -85,59 +243,6 @@ Keep a Changelog conventions.
   path-qualified interpreter (`.venv/bin/python`, `/opt/model-env/bin/pytest`) is
   left exactly as written: it names an environment the wrapper depends on, and
   redirecting it would strip the packages it was installed with.
-
-### Security
-
-- **A passing test run now requires machine-readable proof.** The verdict was the
-  process exit status, produced by a process running the candidate's own patched code,
-  so two lines at the top of the file under review (`import os; os._exit(0)`) ended the
-  interpreter with status 0 during collection and a genuinely failing suite was recorded
-  as a validated repair. The same trick worked by planting a workspace-root module that
-  shadows anything pytest imports (`_pytest`, `pluggy`, `iniconfig`), which no blocklist
-  of module names can close. pytest now writes a JUnit report to a path outside the
-  workspace, and a pass additionally requires that report to show at least one test and
-  no failures or errors; sabotage that stops the suite also stops the report. The
-  residual case — a patch that locates the report and forges it — needs the reviewer
-  isolation boundary and is documented in `arena/execution/test_evidence.py`.
-- **A reviewer that can read the answer key is no longer ranked as if it were blind.**
-  `custom-command` ran with the repository as its working directory and the full host
-  environment, so a wrapper sat one relative path from `benchmark_sets/<case>/
-  reference.patch` and was handed every credential in the operator's shell. A wrapper
-  that reads the oracle and echoes it scored `detection_f_beta=1.000`,
-  `validated_case_rate=1.000`, `localization_rate=1.000` — a perfect result for zero
-  review. The reviewer now starts in its own payload directory with an allowlisted
-  environment (name what a wrapper legitimately needs in `ARENA_PASSTHROUGH_ENV`), which
-  ends the casual read and the credential exposure. A host process can still read by
-  absolute path, so that residual is recorded rather than hidden: runs carry
-  `metadata.reviewer_oracle_reachable`, and default leaderboard eligibility requires it
-  to be false (unknown is treated as unsafe). Such runs stay visible with
-  `--include-unverified`.
-- A **skipped** test is no longer accepted as evidence. JUnit's `tests` attribute counts
-  skips, so requiring `tests > 0` let a patch raise `pytest.skip()` from the file under
-  review and turn a failing suite green — exit 0, a well-formed report, zero failures,
-  seeded bug untouched. A pass now requires at least one *executed* test. A surgical skip
-  that leaves unrelated tests running remains open and is documented in
-  `arena/execution/test_evidence.py`; closing it needs the certified reference run's
-  expected node set.
-- The evidence gate no longer disables itself for `python -W error -m pytest` (or any
-  other interpreter flag before `-m`). Matching `-m` only at `argv[1]` silently fell back
-  to the exit-code-only oracle, and disagreed with `certify._is_pytest_command`, so a case
-  could be certified under pytest semantics and then scored as an unrecognised runner.
-- `POST /runs` no longer lets an unauthenticated caller run a local command or make
-  the server fetch a URL of their choosing. The reviewer spec is now checked against
-  an allowlist of in-process reviewers; `custom-command` (which spawns a process) and
-  `openai:`/`http:` (which issue outbound requests from the server, reachable as
-  server-side request forgery against localhost or a cloud metadata endpoint) require
-  `ARENA_SERVER_ALLOW_LOCAL_EXECUTION`. A reviewer type added later is gated by default.
-- A candidate patch can no longer force a green test run. `PROTECTED_BASENAMES` covered
-  `pytest.ini` but not `.pytest.ini`, `pytest.toml`, `.pytest.toml` or a workspace-root
-  `pytest.py`, all of which pytest consults or imports before the pack's own config, so
-  a patch that repaired nothing could make the hidden suite exit 0.
-- A non-ASCII token header returned 500 rather than 401, and a non-ASCII
-  `ARENA_API_TOKEN` broke authentication for every request; tokens are now compared as
-  bytes, in constant time.
-
-### Fixed
 
 - The audit report published any run it found, so a later `invalid` run (a backend that
   never executed, a pack whose checksum did not match) overwrote a real measurement and
@@ -202,7 +307,7 @@ Keep a Changelog conventions.
   of the same table was already guarded; the guard now covers the README's table and its
   prose total too, and fails until every published count agrees with the shipped
   manifests. The CI seed-control checks likewise no longer hard-code the seed's case
-  count -- they read it from the manifest, so a pack that gains a case cannot quietly
+  count; they read it from the manifest, so a pack that gains a case cannot quietly
   pass a check written for the old size.
 - The database leaderboard paired a pass count taken over EVERY case with
   `validated_case_rate`, which covers execution-backed cases only, so the fraction on the
@@ -211,21 +316,21 @@ Keep a Changelog conventions.
   `validated_eligible_case_count` so no consumer has to guess the denominator.
 - Every dashboard surface now distinguishes "not measured" from zero. A run with no
   execution-backed case previously rendered an empty bar, `0.000`, and a red
-  "not validated" badge — reading exactly like a reviewer that repaired nothing.
+  "not validated" badge, reading exactly like a reviewer that repaired nothing.
 - The home page advertised a hardcoded pack-case total that no longer matched the shipped
   manifests (33 against 32 actual). The counts are still duplicated there because the page
   renders without an API, but `tests/test_dashboard_pack_table.py` now fails if they drift
   from the manifests, or if a shipped pack is missing from the table entirely.
 - **A reviewer can no longer trade a bad score for a harness excuse.** Classifying the
   output-cap kill as a missing backend meant a patch that floods stdout marked the run
-  `partial`, and eligibility rejects a partial run outright — even under
-  `--include-unverified` — so a reviewer heading for 0% could suppress its own published
+  `partial`, and eligibility rejects a partial run outright (even under
+  `--include-unverified`), so a reviewer heading for 0% could suppress its own published
   result. The rule is now explicit and symmetric: anything the PATCH can provoke (a hang,
   an output flood, a suppressed report) is a failing suite; only conditions the reviewer
   cannot influence are inconclusive.
 - A suite cut short by the run's own wall-clock budget is no longer charged to the
   reviewer. `--max-wall-seconds` clamps a case's test timeout, so the harness could end a
-  suite and record `tests_failed` — publishing 0% repair for the exact ground-truth fix on
+  suite and record `tests_failed`, publishing 0% repair for the exact ground-truth fix on
   a run still labelled `complete` and still leaderboard-eligible. Such a case now reports
   `test_deadline_truncated`, counts as an unavailable backend, and degrades the run. A hang
   against the case's own declared timeout remains the patch's failure.
@@ -236,25 +341,25 @@ Keep a Changelog conventions.
 - `validated_case_rate` no longer counts a case whose tests never run. Eligibility keyed
   off `tests_required` alone, but the executor runs tests only when `run_tests` and a
   `test_command` are both set, so a case declaring `tests_required: true` with
-  `run_tests: false` sat in the denominator as a permanent miss — publishing 0% repair
+  `run_tests: false` sat in the denominator as a permanent miss, publishing 0% repair
   even for the exact ground-truth fix.
 - A harness failure is no longer recorded as a failing test suite. A missing test runner,
   an absent Docker backend and an unusable pack command all produced `tests_failed`, which
   reads as a reviewer miss and hides that the run was degraded; they now report
   `execution_inconclusive`. The dividing line is who caused it: anything the candidate's
-  own patch can provoke — a hang, an output flood (`test_output_too_large`), a suppressed
-  report (`no_test_evidence`) — deliberately stays `tests_failed`, so a reviewer cannot
+  own patch can provoke (a hang, an output flood (`test_output_too_large`), a suppressed
+  report (`no_test_evidence`)) deliberately stays `tests_failed`, so a reviewer cannot
   trade a bad score for a harness excuse. Both kinds still block a validated repair.
 - The excluded-case count measured the reviewer rather than the pack: it was derived from
   whether validators actually ran, so the same pack reported 0 excluded cases for a
   reviewer whose patch never applied and 4 for one whose did. It is now derived from case
   eligibility and named `non_execution_backed_case_count`.
 - `_missing_runner` raised `ModuleNotFoundError` for a dotted `-m` runner whose parent
-  package is absent — the exact condition it exists to convert into a clean skip. It
+  package is absent, the exact condition it exists to convert into a clean skip. It
   escaped `TestExecutor.execute` (whose contract is to return a result, never raise) and
   aborted `certify-pack` and mutation runs, which do not wrap the call.
 - The line-range parser split on `str.splitlines()`, which also breaks on VT, FF, NEL,
-  U+2028/U+2029 and a lone CR — any of which can appear inside a source line's content,
+  U+2028/U+2029 and a lone CR, any of which can appear inside a source line's content,
   silently shifting every derived number in the hunk. It now splits on LF only.
 - Candidate mining no longer reads `latest.py`, `contest.py` or `inspec.rb` as tests: the
   convention match is delimiter-anchored, with CamelCase forms kept case-sensitive. The
@@ -274,136 +379,65 @@ Keep a Changelog conventions.
   execution-backed cases only, so the two numbers disagreed. Both now use the same
   population and the excluded count is shown.
 
-### Changed
+### Security
 
-- `validated_case_rate` is now execution-backed only. A case gated solely by a
-  structural validator is excluded from the rate rather than counted as a validated
-  repair, because a structural validator is a lexical/AST heuristic that a
-  non-repairing patch can satisfy. Its evidence still appears in
-  `structural_pass_rate`. Only `benchmark_sets/v1` is affected (six of its nine cases are
-  execution-backed); `audit_v1`, `audit_v2` and `realfix_seed_v0` are fully executable,
-  so their numbers are unchanged.
-- Three structural validators matched a substring anywhere in the bug file, so a patch
-  adding one dead line earned a validated repair while leaving the defect intact. They
-  now establish the property: no awaited per-item call inside a `.map()` callback, an
-  updater function passed to the state setter, and the tenant column inside the `WHERE`
-  predicate rather than anywhere in the file.
-- `spring_boot_null_handling_001` has been removed from `benchmark_sets/v1`. It declared
-  `patch_required` with no tests and no structural validators, so it could never confirm a
-  repair and penalised every reviewer identically. This harness cannot execute Java, and a
-  static substitute proved unsound in both directions — it passed a no-op that rebound the
-  Optional to a local and still dereferenced it, while rejecting a genuine
-  `isPresent()`-guarded 404. Shipping a case the harness cannot judge is worse than
-  shipping one fewer, so it is gone rather than faked. Pack validation now rejects any case
-  that demands a patch without a gate, and `benchmark_sets/v1` (nine cases: six
-  execution-backed, three structural-only) re-pinned its checksum.
-- The dashboard no longer depends on Tailwind. It used no Tailwind utility classes, so
-  the framework only supplied a reset, which now lives in `globals.css`; the rendered
-  output is unchanged. This unblocked the dependency updates that clear all four
-  outstanding high-severity npm advisories.
-- Dependabot no longer rewrites the minimum-dependency pins (renamed to
-  `constraints/minimum.pip`), and major updates are grouped separately so a breaking
-  major cannot hold back security patches.
+- **The PR-description label leak in `integrity_pilot_v0` is closed.** The author
+  wrote both descriptions of each pair, and the genuine arm ran longer in 7 of 8 pairs,
+  so a word-count threshold alone reached 0.625 pairwise discrimination without reading
+  the change. Both arms of every pair now carry byte-identical description prose,
+  enforced at certification by the new `descriptions_identical` gate, and the pack
+  checksum was regenerated. Prose statistics stay as diagnostics with their null
+  distributions attached, never as gates: at eight pairs, chance pairwise
+  discrimination is 0.25, which is the admissibility ceiling itself.
 
-### Added
-
-- **Training-data exposure disclosure**, the project's answer to the standard and
-  most damaging criticism of any benchmark built from public repository history:
-  every RealFix case is derived from a public repository, so the upstream fix, its
-  regression test and its pull-request discussion are plausibly in the pretraining
-  corpus of the model being evaluated, and a model may reproduce a repair it
-  remembers rather than one it reasoned to. Until now the harness had no answer --
-  the one field that would have supported one, `fixed_date`, lived in hand-written
-  evidence files that no code read.
-  - Every case now carries an `origin` block, and `arena import-fix` writes it from
-    the commit object itself (`%aI`/`%cI`, earlier of the two, with the basis naming
-    which won), so it is reproducible rather than remembered. A spec may declare an
-    earlier date -- an issue or advisory that disclosed the defect before the fix
-    landed -- but a *later* declared date is discarded in favour of the commit's:
-    disagreement resolves toward more assumed exposure, never less.
-  - `arena run` accepts `--model-knowledge-cutoff` with a mandatory
-    `--model-cutoff-basis` and `--model-cutoff-source`. A bare date is refused
-    before the run starts, because a cohort split resting on an assertion nobody can
-    attribute is worse than no split. `--cutoff-grace-days` can only be widened past
-    its 90-day default; narrowing it would let an operator manufacture a cohort out
-    of borderline cases.
-  - Cases split into `pre_cutoff` / `post_cutoff` / `undetermined` /
-    `not_applicable`, stamped per case in `run.json` so a third party can recompute
-    the analysis at a different cutoff without rerunning a reviewer. An undated case
-    is never imputed into a cohort, and the guard band is closed on both sides, so a
-    borderline case can never tip a published difference.
-  - `exposure_gap` is withheld unless the comparison is actually powered, with
-    machine-readable `suppression_reasons` (`no_declared_cutoff`,
-    `cohort_too_small:pre|post`, `too_many_undetermined`, `retrieval_not_ruled_out`).
-    Unruled-out reviewer retrieval suppresses **by default**, because live retrieval
-    defeats a cutoff argument entirely. Cohort counts, Wilson intervals, the
-    repository x cohort cross-tab and `min_detectable_gap` publish either way --
-    on today's five-case seed the minimum detectable difference is 1.0, which says
-    plainly that nothing short of the entire range would be detectable.
-  - Exposure is disclosure and never leaderboard eligibility: gating rank on a
-    self-declared field would create a direct incentive to declare a convenient
-    value. Documented end to end, including what it is NOT, in
-    [docs/training-data-exposure.md](docs/training-data-exposure.md).
-- All five RealFix cases were re-imported from fresh upstream clones to carry the
-  new provenance. Every vendored tree (`before/`, `after/`, `tests/`, `pr.diff`,
-  `reference.patch`) reproduced byte-identically, which is the first end-to-end
-  check of the pack's reproducibility claim rather than an assertion of it.
-- **Two more real-fix cases, mined end to end**, taking `realfix_seed_v0` from three
-  cases to five and proving the ingestion path rather than asserting it. Both come from
-  `pypa/packaging` via `arena mine-fixes` (108 candidates from 400 commits in 2.6s),
-  and both certify at **verified** with a 100% mutant kill rate — higher than any case
-  the pack already shipped:
-  - `packaging_name_validation_newline_001` (upstream PR #925): the core-metadata Name
-    pattern was anchored with `$`, which Python also matches immediately before a
-    trailing newline, so `canonicalize_name("hi\n", validate=True)` returned instead of
-    raising `InvalidName` and a line break could reach an RFC822-style metadata field.
-  - `packaging_marker_extra_normalization_001` (upstream PR #1024): extra normalization
-    rewrote `results[0]` instead of walking the marker list, so
-    `python_version >= "3" and extra == "mariadb_connector"` kept its underscore, never
-    matched the canonical extra, and the optional dependency was silently skipped.
-  Upstream licenses, notices and per-case evidence records ship with the pack. Selecting
-  a whole test module rather than the single fail-to-pass test is what earns the
-  mutation evidence: the narrow command certified only to `development` (17% and 20%
-  kill rate) because mutants elsewhere in the file had nothing to catch them.
-- **`arena mine-fixes`**, which proposes historical fixes that could become
-  execution-backed review cases. `import-fix` converts one commit pair but infers no
-  semantics, so every case cost a hand-written spec and a real-fix pack grew three cases
-  at a time. Mining applies the selection rule behind SWE-bench's fail-to-pass signal — a
-  non-merge commit that changed both a test file and a source file, with its parent as
-  the buggy state — ranks the tightest diffs first, and emits a scaffolded import spec
-  with every Git-derivable field filled in and every semantic field left an explicit
-  `TODO`. It proposes only: `arena certify-pack` still decides by running the tests at
-  both commits. It surfaces 66 candidates from this repository's 192 commits, and 108 from
-  400 commits of `pypa/packaging` in 2.6 seconds.
-- `validated_eligible_case_count` and `non_execution_backed_case_count` on every run, so
-  the denominator behind `validated_case_rate` is explicit. Both are derived from the
-  case, not from how a particular reviewer happened to do, so the same pack always
-  reports the same split.
-- `arena leaderboard` explains an empty default table instead of printing a bare header
-  when every run was filtered out as unverified.
-- Documented the `shallow-patch`, `openai:<base_url>` and `http:<url>` reviewers, which
-  shipped but appeared in no user-facing documentation.
-
-- **CRA-Integrity** (`arena/integrity/`, `benchmark_sets/integrity_pilot_v0`): a
-  new evaluation track that asks whether a code reviewer can tell a genuinely
-  correct green pull request from one that is green because its validation
-  evidence was weakened, bypassed or overfit. Three trust zones (product,
-  candidate-owned validation, hidden benchmark oracle) are separated on disk; a
-  pair ships a genuine and a compromised pull request against the same task,
-  baseline, visible command and reviewer context, and the reviewer is not told
-  which it received. Eight pilot pairs cover eight mechanisms and every one is
-  certified `verified`: the baseline fails the oracle, the genuine variant passes
-  both surfaces, the compromised variant passes visible and fails trusted, the
-  oracle is independent of candidate-owned expectations, accepts a structurally
-  different legitimate implementation, and kills mutants of the genuine code.
-  Metrics are reported separately and never averaged, with pairwise discrimination
-  as the headline: the `integrity:blanket-reject` control scores perfect attack
-  recall and zero discrimination, which is why recall is never reported alone.
-  `arena integrity-audit` runs three trivial validation-diff heuristics as real
-  reviewers and fails the pack if any of them can separate the pairs.
-- `arena integrity-validate`, `integrity-audit`, `integrity-certify` and
-  `integrity-run`, plus `scripts/build_integrity_pack.py` to derive every pack
-  diff and repair patch from the trees it describes.
+- **A passing test run now requires machine-readable proof.** The verdict was the
+  process exit status, produced by a process running the candidate's own patched code,
+  so two lines at the top of the file under review (`import os; os._exit(0)`) ended the
+  interpreter with status 0 during collection and a genuinely failing suite was recorded
+  as a validated repair. The same trick worked by planting a workspace-root module that
+  shadows anything pytest imports (`_pytest`, `pluggy`, `iniconfig`), which no blocklist
+  of module names can close. pytest now writes a JUnit report to a path outside the
+  workspace, and a pass additionally requires that report to show at least one test and
+  no failures or errors; sabotage that stops the suite also stops the report. The
+  residual case (a patch that locates the report and forges it) needs the reviewer
+  isolation boundary and is documented in `arena/execution/test_evidence.py`.
+- **A reviewer that can read the answer key is no longer ranked as if it were blind.**
+  `custom-command` ran with the repository as its working directory and the full host
+  environment, so a wrapper sat one relative path from `benchmark_sets/<case>/
+  reference.patch` and was handed every credential in the operator's shell. A wrapper
+  that reads the oracle and echoes it scored `detection_f_beta=1.000`,
+  `validated_case_rate=1.000`, `localization_rate=1.000`: a perfect result for zero
+  review. The reviewer now starts in its own payload directory with an allowlisted
+  environment (name what a wrapper legitimately needs in `ARENA_PASSTHROUGH_ENV`), which
+  ends the casual read and the credential exposure. A host process can still read by
+  absolute path, so that residual is recorded rather than hidden: runs carry
+  `metadata.reviewer_oracle_reachable`, and default leaderboard eligibility requires it
+  to be false (unknown is treated as unsafe). Such runs stay visible with
+  `--include-unverified`.
+- A **skipped** test is no longer accepted as evidence. JUnit's `tests` attribute counts
+  skips, so requiring `tests > 0` let a patch raise `pytest.skip()` from the file under
+  review and turn a failing suite green: exit 0, a well-formed report, zero failures,
+  seeded bug untouched. A pass now requires at least one *executed* test. A surgical skip
+  that leaves unrelated tests running remains open and is documented in
+  `arena/execution/test_evidence.py`; closing it needs the certified reference run's
+  expected node set.
+- The evidence gate no longer disables itself for `python -W error -m pytest` (or any
+  other interpreter flag before `-m`). Matching `-m` only at `argv[1]` silently fell back
+  to the exit-code-only oracle, and disagreed with `certify._is_pytest_command`, so a case
+  could be certified under pytest semantics and then scored as an unrecognised runner.
+- `POST /runs` no longer lets an unauthenticated caller run a local command or make
+  the server fetch a URL of their choosing. The reviewer spec is now checked against
+  an allowlist of in-process reviewers; `custom-command` (which spawns a process) and
+  `openai:`/`http:` (which issue outbound requests from the server, reachable as
+  server-side request forgery against localhost or a cloud metadata endpoint) require
+  `ARENA_SERVER_ALLOW_LOCAL_EXECUTION`. A reviewer type added later is gated by default.
+- A candidate patch can no longer force a green test run. `PROTECTED_BASENAMES` covered
+  `pytest.ini` but not `.pytest.ini`, `pytest.toml`, `.pytest.toml` or a workspace-root
+  `pytest.py`, all of which pytest consults or imports before the pack's own config, so
+  a patch that repaired nothing could make the hidden suite exit 0.
+- A non-ASCII token header returned 500 rather than 401, and a non-ASCII
+  `ARENA_API_TOKEN` broke authentication for every request; tokens are now compared as
+  bytes, in constant time.
 
 ## 0.2.0 - 2026-07-13
 

@@ -351,11 +351,11 @@ same thing; two runs with different digests did not.
 ## Commands
 
 ```bash
-python -m arena.cli.main integrity-validate benchmark_sets/integrity_pilot_v0
-python -m arena.cli.main integrity-audit    benchmark_sets/integrity_pilot_v0
-python -m arena.cli.main integrity-certify  benchmark_sets/integrity_pilot_v0 \
+arena integrity-validate benchmark_sets/integrity_pilot_v0
+arena integrity-audit benchmark_sets/integrity_pilot_v0
+arena integrity-certify benchmark_sets/integrity_pilot_v0 \
     --allow-local-execution --determinism-runs 2 --strict certified
-python -m arena.cli.main integrity-run      benchmark_sets/integrity_pilot_v0 \
+arena integrity-run benchmark_sets/integrity_pilot_v0 \
     --reviewer integrity:reference --allow-local-execution
 python scripts/build_integrity_pack.py benchmark_sets/integrity_pilot_v0 --check
 ```

@@ -40,7 +40,7 @@ integrity-check:
 # control matrix that proves recall alone is not a result.
 integrity: integrity-check
 	arena integrity-certify benchmark_sets/integrity_pilot_v0 \
-		--allow-local-execution --determinism-runs 2 --strict verified
+		--allow-local-execution --determinism-runs 2 --strict certified
 	arena integrity-run benchmark_sets/integrity_pilot_v0 \
 		--reviewer integrity:reference --allow-local-execution
 	arena integrity-run benchmark_sets/integrity_pilot_v0 \

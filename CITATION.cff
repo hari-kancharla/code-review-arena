@@ -1,0 +1,26 @@
+cff-version: 1.2.0
+message: "If you use Code Review Arena, please cite it using the metadata below."
+title: "Code Review Arena"
+abstract: >-
+  An execution-backed benchmark harness for AI code-review agents. It applies each
+  reviewer's suggested patch in an isolated workspace, runs the required tests and
+  validators, and scores detection separately from validated repair. It also ships
+  CRA-Integrity, a track that asks whether a reviewer can tell a genuinely correct
+  green pull request from one whose validation evidence was weakened.
+type: software
+authors:
+  - family-names: "Kancharla"
+    given-names: "Hari"
+repository-code: "https://github.com/hari-kancharla/code-review-arena"
+url: "https://github.com/hari-kancharla/code-review-arena"
+license: MIT
+version: "0.3.0"
+date-released: "2026-11-21"
+keywords:
+  - code review
+  - benchmark
+  - large language models
+  - software testing
+  - evaluation
+# After Zenodo mints the DOI for v0.3.0, add it here, for example:
+# doi: "10.5281/zenodo.XXXXXXX"
