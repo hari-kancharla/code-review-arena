@@ -5,8 +5,7 @@ Execution-backed benchmark for AI code-review agents.
 [![CI](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
-<!-- DOI badge: replace DOI_PLACEHOLDER with the concept DOI Zenodo mints for the first release. -->
-[![DOI](https://zenodo.org/badge/DOI/DOI_PLACEHOLDER.svg)](https://doi.org/DOI_PLACEHOLDER)
+[![DOI](https://zenodo.org/badge/1251661586.svg)](https://doi.org/10.5281/zenodo.24425641)
 
 ## About
 
@@ -341,7 +340,10 @@ authoring, and the audit report.
 
 If you use Code Review Arena in research, please cite it. GitHub's "Cite this
 repository" button reads [CITATION.cff](CITATION.cff), and each tagged release is
-archived on Zenodo with its own DOI.
+archived on Zenodo with its own DOI. To cite the project as a whole, use the
+concept DOI [10.5281/zenodo.24425641](https://doi.org/10.5281/zenodo.24425641), which
+always resolves to the latest release; v0.3.0 itself is
+[10.5281/zenodo.24425642](https://doi.org/10.5281/zenodo.24425642).
 
 ## Contributing and security
 

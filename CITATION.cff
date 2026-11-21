@@ -22,5 +22,11 @@ keywords:
   - large language models
   - software testing
   - evaluation
-# After Zenodo mints the DOI for v0.3.0, add it here, for example:
-# doi: "10.5281/zenodo.XXXXXXX"
+doi: "10.5281/zenodo.24425641"
+identifiers:
+  - type: doi
+    value: "10.5281/zenodo.24425641"
+    description: "Concept DOI for all versions of Code Review Arena"
+  - type: doi
+    value: "10.5281/zenodo.24425642"
+    description: "DOI for version 0.3.0"
