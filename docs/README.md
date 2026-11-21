@@ -18,6 +18,7 @@ Start here, then read by topic.
 - [structural-validators.md](structural-validators.md) - tolerant repair-shape checks
 - [integrity-track.md](integrity-track.md) - CRA-Integrity: can a reviewer tell a trustworthy green from a hollow one
 - [training-data-exposure.md](training-data-exposure.md) - dating cases against a model's knowledge cutoff, and what that does not prove
+- [security-model.md](security-model.md) - isolation, integrity guarantees, the Docker path and leaderboard eligibility
 - [trusted-evaluation-architecture.md](trusted-evaluation-architecture.md) - the threat model and the invariants behind every gate
 
 ## Reference
