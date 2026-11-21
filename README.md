@@ -5,6 +5,8 @@ Execution-backed benchmark for AI code-review agents.
 [![CI](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml/badge.svg)](https://github.com/hari-kancharla/code-review-arena/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
+<!-- DOI badge: replace DOI_PLACEHOLDER with the concept DOI Zenodo mints for the first release. -->
+[![DOI](https://zenodo.org/badge/DOI/DOI_PLACEHOLDER.svg)](https://doi.org/DOI_PLACEHOLDER)
 
 ## About
 
@@ -137,7 +139,7 @@ trusted-local and are excluded from the leaderboard unless you pass `--include-u
 
 A separate track. Instead of asking whether a reviewer can find a planted defect,
 it asks whether a reviewer can tell that the green checks on a pull request no
-longer mean anything -- because an assertion was weakened, a test left collection,
+longer mean anything: an assertion was weakened, a test left collection,
 a golden file was regenerated from the code it was meant to check, the function
 under test was stubbed out, or the implementation answers the ticket's examples
 rather than its rule.
@@ -148,17 +150,22 @@ satisfies a hidden, independently executed contract. The reviewer is not told wh
 it received.
 
 ```bash
-python -m arena.cli.main integrity-audit benchmark_sets/integrity_pilot_v0
-python -m arena.cli.main integrity-certify benchmark_sets/integrity_pilot_v0 \
-    --allow-local-execution --determinism-runs 2 --strict verified
-python -m arena.cli.main integrity-run benchmark_sets/integrity_pilot_v0 \
+arena integrity-audit benchmark_sets/integrity_pilot_v0
+arena integrity-certify benchmark_sets/integrity_pilot_v0 \
+    --allow-local-execution --determinism-runs 2 --strict certified
+arena integrity-run benchmark_sets/integrity_pilot_v0 \
     --reviewer integrity:reference --allow-local-execution
 ```
 
-The headline metric is pairwise discrimination -- approve the genuine variant *and*
+The headline metric is pairwise discrimination: approve the genuine variant *and*
 block the compromised one. A reviewer that blocks both scores perfect attack recall
-and zero discrimination, which is exactly why recall is never reported alone. See
-[docs/integrity-track.md](docs/integrity-track.md).
+and zero discrimination, which is exactly why recall is never reported alone. A
+pair only earns credit when its runtime evidence is complete (both visible runs pass,
+the trusted evidence matches the labels, both reviews are usable); anything else is
+reported as `indeterminate` instead of being scored. Both arms of a pair carry
+identical description text, so the prose cannot give the label away. Certification
+tops out at `certified` rather than `verified`, because oracle confidentiality cannot
+be proven from inside the pack. See [docs/integrity-track.md](docs/integrity-track.md).
 
 ### Docker backend (the verified path)
 
@@ -181,14 +188,18 @@ could not reach the answer key, and a pack digest supplied out of band with
 ## Benchmark your own model
 
 The built-in reviewers are the deterministic controls, `reference-patch`, and
-`shallow-patch` (a generic adversarial baseline). To score a real model you have two
-options, and both keep the payload blind (no ground truth, no descriptive metadata), so a
-reviewer cannot pass on metadata alone:
+`shallow-patch` (a generic adversarial baseline). To score a real model you have three
+options, and all of them keep the payload blind (no ground truth, no descriptive
+metadata), so a reviewer cannot pass on metadata alone:
 
-- Point `--reviewer openai:<base_url>` (or `http:<url>`) straight at a local model server —
-  Ollama, vLLM, LM Studio, llama.cpp — with `--model`, no wrapper needed.
-- Or wrap any model in a local command that reads the case JSON and prints review JSON,
+- Point `--reviewer openai:<base_url>` (or `http:<url>`) straight at a local model server
+  (Ollama, vLLM, LM Studio, llama.cpp) with `--model`, no wrapper needed.
+- Wrap any model in a local command that reads the case JSON and prints review JSON,
   and point `custom-command` at it.
+- Run that same wrapper inside a locally built image with `docker-command`. The
+  container has no network and sees only the read-only payload, so it cannot reach the
+  answer key, and only these runs count toward the default leaderboard. See
+  [docs/docker-command-reviewer.md](docs/docker-command-reviewer.md).
 
 ```bash
 arena run benchmark_sets/audit_v1 --reviewer openai:http://localhost:11434/v1 \
@@ -211,6 +222,10 @@ arena run benchmark_sets/audit_v1 \
 `{diff_file}`, `{case_id}`, and `{workspace}` are expanded per case. `--max-wall-seconds`
 and `--max-cost` cap a run; `--enable-repair` opts into a deterministic salvage of
 almost-valid JSON (logged on the response).
+
+Run `arena preflight <pack> --reviewer <spec>` first to check the pack, the reviewer
+config and the local prerequisites (Docker images included) without executing anything;
+see [docs/preflight.md](docs/preflight.md).
 
 ## Reports and dashboard
 
@@ -261,7 +276,7 @@ Metrics:
 | `structural_pass_rate` | Required structural validator checks that passed |
 | `false_positives_per_case` | Unsupported findings per evaluated case |
 
-Control reviewers (deterministic harness checks, not external model results):
+Built-in reviewers (the controls are deterministic harness checks, not external model results):
 
 | Reviewer | Role |
 |---|---|
@@ -271,6 +286,8 @@ Control reviewers (deterministic harness checks, not external model results):
 | `control:bad_patch` | Detects bugs but supplies failing fixes |
 | `control:detects_no_patch` | Detects bugs without a patch |
 | `control:malformed_patch` | Supplies invalid patch output |
+| `shallow-patch` | Adversarial baseline: localizes the bug, then supplies a patch that applies but fixes nothing |
+| `openai:<base_url>` / `http:<url>` | Calls a model server directly (needs `--model` for `openai:`) |
 | `custom-command` | Runs your local reviewer command over structured input and output |
 | `docker-command` | Runs your reviewer inside a hardened container; blind and leaderboard-eligible |
 
@@ -319,6 +336,12 @@ authoring, and the audit report.
   alternate valid repairs, and string literals are not stripped. Tests are the gate.
 - Passing tests is execution evidence, not proof of complete correctness.
 - This is a local audit harness, not a large-scale public ranking.
+
+## Citing
+
+If you use Code Review Arena in research, please cite it. GitHub's "Cite this
+repository" button reads [CITATION.cff](CITATION.cff), and each tagged release is
+archived on Zenodo with its own DOI.
 
 ## Contributing and security
 
