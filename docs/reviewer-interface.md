@@ -36,6 +36,8 @@ cannot satisfy patch validation in full mode.
     --model llama3 --mode full --allow-local-execution
   ```
 
+`mock:<mode>` remains a deprecated alias for `control:<mode>` for one release.
+
 ## Custom command
 
 `custom-command` writes the reviewer-visible case to a JSON file (via
@@ -44,6 +46,19 @@ placeholders are expanded per case: `{case_json}`, `{diff_file}`, `{case_id}`,
 `{workspace}`. The command prints review JSON to stdout with no Markdown fences; the
 output is parsed by `parse_reviewer_output`. See
 [custom-command-reviewer.md](custom-command-reviewer.md) for a worked example.
+
+`scripts/fake_reviewer.py` is a working wrapper to copy. Before a full run, check it
+against the contract with a one-case dry run:
+
+```bash
+arena schema                       # the JSON contract your wrapper must emit
+arena verify-reviewer benchmark_sets/audit_v1 \
+  --command "python scripts/fake_reviewer.py --case {case_json}"
+```
+
+`--max-wall-seconds` and `--max-cost` cap a run; `--enable-repair` opts into a
+deterministic salvage of almost-valid JSON (logged on the response;
+see the output contract below).
 
 `docker-command` runs that same wrapper inside a hardened container (no network,
 read-only payload mount, never pulled), so the review is a blind measurement:
